@@ -14,12 +14,19 @@ public:
   Camera(float fov, float aspect);
   ~Camera();
 
-  void setAspect(float aspect) { aspect_ = aspect; }
+  void setAspect(float aspect) noexcept { aspect_ = aspect; }
+  auto distance() const noexcept { return distance_; }
 
+  // Mouse control
   void translateByPixels(int dx, int dy);
   void rotateByPixels(int dx, int dy);
   void zoomByPixels(int dx, int dy);
   void zoomByScroll(float dx, float dy);
+
+  // Keyboard control
+  void moveForward(float distance);
+  void moveRight(float distance);
+  void moveUp(float distance);
 
   glm::vec3 eye() const;
   glm::mat4 view() const;

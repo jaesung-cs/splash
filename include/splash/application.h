@@ -56,6 +56,8 @@ private:
   glm::vec2 lastCursorPos_{ 0.f, 0.f };
   std::array<bool, 2> mouseButtons_{ false, false };
   std::array<bool, 256> keys_{ false };
+
+  float cameraSpeed_ = 3.f;
 };
 }
 

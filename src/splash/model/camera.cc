@@ -49,6 +49,31 @@ void Camera::zoomByScroll(float dx, float dy)
   distance_ *= std::exp(-zoomScrollSensitivity_ * dy);
 }
 
+void Camera::moveForward(float distance)
+{
+  const auto cosTheta = std::cos(theta_);
+  const auto sinTheta = std::sin(theta_);
+  const auto cosPhi = std::cos(phi_);
+  const auto sinPhi = std::sin(phi_);
+
+  center_ += -distance * glm::vec3(cosTheta * cosPhi, sinTheta * cosPhi, sinPhi);
+}
+
+void Camera::moveRight(float distance)
+{
+  const auto cosTheta = std::cos(theta_);
+  const auto sinTheta = std::sin(theta_);
+  const auto cosPhi = std::cos(phi_);
+  const auto sinPhi = std::sin(phi_);
+
+  center_ += -distance * glm::vec3(sinTheta, -cosTheta, 0.f);
+}
+
+void Camera::moveUp(float distance)
+{
+  center_ += distance * up_;
+}
+
 glm::vec3 Camera::eye() const
 {
   const auto cosTheta = std::cos(theta_);

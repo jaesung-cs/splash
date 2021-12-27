@@ -3,6 +3,7 @@
 #include <chrono>
 #include <thread>
 #include <iostream>
+#include <chrono>
 
 #include <glad/glad.h>
 
@@ -67,6 +68,7 @@ Application::Application()
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+  glfwWindowHint(GLFW_SAMPLES, 4);
 
   width_ = 1600;
   height_ = 900;
@@ -88,10 +90,16 @@ Application::Application()
 
   if (!gladLoadGL())
     throw std::runtime_error("Failed to initialize GL");
+
+  glEnable(GL_MULTISAMPLE);
 }
 
 Application::~Application()
 {
+  floorShader_ = nullptr;
+  floorTexture_ = nullptr;
+  floorGeometry_ = nullptr;
+
   glfwTerminate();
 }
 
@@ -143,7 +151,23 @@ void Application::scroll(float dx, float dy)
 
 void Application::keyboard(int key, int action)
 {
-  // TODO
+  if (key < 256)
+  {
+    bool pressed = false;
+    switch (action)
+    {
+    case GLFW_PRESS:
+    case GLFW_REPEAT:
+      pressed = true;
+      break;
+
+    case GLFW_RELEASE:
+      pressed = false;
+      break;
+    }
+
+    keys_[key] = pressed;
+  }
 }
 
 void Application::run()
@@ -198,9 +222,21 @@ void Application::run()
   // Camera
   camera_ = std::make_unique<model::Camera>(60.f / 180.f * glm::pi<float>(), static_cast<float>(width_) / height_);
 
+  auto lastTimestamp = std::chrono::high_resolution_clock::now();
   while (!glfwWindowShouldClose(window_))
   {
+    auto now = std::chrono::high_resolution_clock::now();
+    auto dt = std::chrono::duration<float>(now - lastTimestamp).count();
+    lastTimestamp = now;
+
     glfwPollEvents();
+
+    // Keyboard movement
+    if (keys_['W']) camera_->moveForward(dt * cameraSpeed_ * camera_->distance());
+    if (keys_['S']) camera_->moveForward(-dt * cameraSpeed_ * camera_->distance());
+    if (keys_['A']) camera_->moveRight(-dt * cameraSpeed_ * camera_->distance());
+    if (keys_['D']) camera_->moveRight(dt * cameraSpeed_ * camera_->distance());
+    if (keys_[' ']) camera_->moveUp(dt * cameraSpeed_ * camera_->distance());
 
     draw();
 
