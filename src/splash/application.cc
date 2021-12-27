@@ -67,7 +67,6 @@ Application::Application()
 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-  glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
   glfwWindowHint(GLFW_SAMPLES, 4);
 
   width_ = 1600;
@@ -107,6 +106,8 @@ void Application::resize(uint32_t width, uint32_t height)
 {
   width_ = width;
   height_ = height;
+
+  camera_->setAspect(static_cast<float>(width) / height);
 }
 
 void Application::cursor(float x, float y)
