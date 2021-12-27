@@ -31,14 +31,8 @@ public:
 
   void run();
 
-  // Callbacks
-  void resize(uint32_t width, uint32_t height);
-  void cursor(float x, float y);
-  void mouse(int button, int action);
-  void scroll(float dx, float dy);
-  void keyboard(int key, int action);
-
 private:
+  void handleEvents();
   void draw();
 
   GLFWwindow* window_ = nullptr;
@@ -53,10 +47,6 @@ private:
   std::unique_ptr<gl::Geometry> floorGeometry_;
 
   // UI
-  glm::vec2 lastCursorPos_{ 0.f, 0.f };
-  std::array<bool, 2> mouseButtons_{ false, false };
-  std::array<bool, 256> keys_{ false };
-
   float cameraSpeed_ = 3.f;
 };
 }

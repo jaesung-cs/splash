@@ -12,6 +12,10 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include <splash/model/camera.h>
 #include <splash/model/image.h>
 #include <splash/gl/shader.h>
@@ -25,36 +29,6 @@ namespace
 void errorCallback(int error, const char* description)
 {
   std::cerr << "Error: " << description << std::endl;
-}
-
-void resizeCallback(GLFWwindow* window, int width, int height)
-{
-  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-  application->resize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
-}
-
-void cursorCallback(GLFWwindow* window, double xpos, double ypos)
-{
-  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-  application->cursor(static_cast<float>(xpos), static_cast<float>(ypos));
-}
-
-void mouseCallback(GLFWwindow* window, int button, int action, int mods)
-{
-  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-  application->mouse(button, action);
-}
-
-void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
-{
-  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-  application->scroll(static_cast<float>(xoffset), static_cast<float>(yoffset));
-}
-
-void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
-{
-  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
-  application->keyboard(key, action);
 }
 }
 
@@ -79,11 +53,6 @@ Application::Application()
 
   // Callbacks
   glfwSetWindowUserPointer(window_, this);
-  glfwSetWindowSizeCallback(window_, resizeCallback);
-  glfwSetCursorPosCallback(window_, cursorCallback);
-  glfwSetMouseButtonCallback(window_, mouseCallback);
-  glfwSetScrollCallback(window_, scrollCallback);
-  glfwSetKeyCallback(window_, keyboardCallback);
 
   glfwMakeContextCurrent(window_);
 
@@ -91,84 +60,33 @@ Application::Application()
     throw std::runtime_error("Failed to initialize GL");
 
   glEnable(GL_MULTISAMPLE);
+
+  // Setup Dear ImGui context
+  IMGUI_CHECKVERSION();
+  ImGui::CreateContext();
+  ImGuiIO& io = ImGui::GetIO(); (void)io;
+
+  // Setup Dear ImGui style
+  ImGui::StyleColorsDark();
+
+  // Setup Platform/Renderer backends
+  const char* glslVersion = "#version 430";
+  ImGui_ImplGlfw_InitForOpenGL(window_, true);
+  ImGui_ImplOpenGL3_Init(glslVersion);
 }
 
 Application::~Application()
 {
+  // ImGui Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplGlfw_Shutdown();
+  ImGui::DestroyContext();
+
   floorShader_ = nullptr;
   floorTexture_ = nullptr;
   floorGeometry_ = nullptr;
 
   glfwTerminate();
-}
-
-void Application::resize(uint32_t width, uint32_t height)
-{
-  width_ = width;
-  height_ = height;
-
-  camera_->setAspect(static_cast<float>(width) / height);
-}
-
-void Application::cursor(float x, float y)
-{
-  glm::vec2 delta = glm::vec2(x, y) - lastCursorPos_;
-  auto dx = static_cast<int>(delta.x);
-  auto dy = static_cast<int>(delta.y);
-
-  if (mouseButtons_[0] && !mouseButtons_[1])
-    camera_->rotateByPixels(dx, dy);
-  else if (!mouseButtons_[0] && mouseButtons_[1])
-    camera_->translateByPixels(dx, dy);
-  else if (mouseButtons_[0] && mouseButtons_[1])
-    camera_->zoomByPixels(dx, dy);
-
-  lastCursorPos_ = { x, y };
-}
-
-void Application::mouse(int button, int action)
-{
-  switch (button)
-  {
-  case GLFW_MOUSE_BUTTON_LEFT: button = 0; break;
-  case GLFW_MOUSE_BUTTON_RIGHT: button = 1; break;
-  default: button = 0; break;
-  }
-
-  bool pressed = false;
-  switch (action)
-  {
-  case GLFW_PRESS: pressed = true; break;
-  case GLFW_RELEASE: pressed = false; break;
-  }
-
-  mouseButtons_[button] = pressed;
-}
-
-void Application::scroll(float dx, float dy)
-{
-  camera_->zoomByScroll(dx, dy);
-}
-
-void Application::keyboard(int key, int action)
-{
-  if (key < 256)
-  {
-    bool pressed = false;
-    switch (action)
-    {
-    case GLFW_PRESS:
-    case GLFW_REPEAT:
-      pressed = true;
-      break;
-
-    case GLFW_RELEASE:
-      pressed = false;
-      break;
-    }
-
-    keys_[key] = pressed;
-  }
 }
 
 void Application::run()
@@ -232,19 +150,68 @@ void Application::run()
 
     glfwPollEvents();
 
-    // Keyboard movement
-    if (keys_['W']) camera_->moveForward(dt * cameraSpeed_ * camera_->distance());
-    if (keys_['S']) camera_->moveForward(-dt * cameraSpeed_ * camera_->distance());
-    if (keys_['A']) camera_->moveRight(-dt * cameraSpeed_ * camera_->distance());
-    if (keys_['D']) camera_->moveRight(dt * cameraSpeed_ * camera_->distance());
-    if (keys_[' ']) camera_->moveUp(dt * cameraSpeed_ * camera_->distance());
+    handleEvents();
+
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    if (ImGui::Begin("Control"))
+    {
+      if (ImGui::Button("Hello World"))
+        std::cout << "Hello World!" << std::endl;
+    }
+    ImGui::End();
+
+    ImGui::Render();
 
     draw();
+
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     glfwSwapBuffers(window_);
 
     using namespace std::chrono_literals;
     std::this_thread::sleep_for(0.001s);
+  }
+}
+
+void Application::handleEvents()
+{
+  const auto& io = ImGui::GetIO();
+
+  // Resize
+  width_ = io.DisplaySize[0];
+  height_ = io.DisplaySize[1];
+  camera_->setAspect(static_cast<float>(width_) / height_);
+
+  // Mouse
+  if (!io.WantCaptureMouse && io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX)
+  {
+    auto dx = static_cast<int>(io.MouseDelta.x);
+    auto dy = static_cast<int>(io.MouseDelta.y);
+
+    if (io.MouseDown[0] && !io.MouseDown[1])
+      camera_->rotateByPixels(dx, dy);
+    else if (!io.MouseDown[0] && io.MouseDown[1])
+      camera_->translateByPixels(dx, dy);
+    else if (io.MouseDown[0] && io.MouseDown[1])
+      camera_->zoomByPixels(dx, dy);
+  }
+
+  // Scroll
+  camera_->zoomByScroll(io.MouseWheelH, io.MouseWheel);
+
+  // Keyboard
+  if (!io.WantCaptureKeyboard)
+  {
+    const auto dt = io.DeltaTime;
+    if (io.KeysDown['W']) camera_->moveForward(dt * cameraSpeed_ * camera_->distance());
+    if (io.KeysDown['S']) camera_->moveForward(-dt * cameraSpeed_ * camera_->distance());
+    if (io.KeysDown['A']) camera_->moveRight(-dt * cameraSpeed_ * camera_->distance());
+    if (io.KeysDown['D']) camera_->moveRight(dt * cameraSpeed_ * camera_->distance());
+    if (io.KeysDown[' ']) camera_->moveUp(dt * cameraSpeed_ * camera_->distance());
   }
 }
 

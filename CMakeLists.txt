@@ -8,7 +8,7 @@ project(splash)
 find_package(glad CONFIG REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
-find_package(nlohmann_json CONFIG REQUIRED)
+find_package(imgui CONFIG REQUIRED)
 
 # splash executable
 add_executable(splash
@@ -25,6 +25,7 @@ target_link_libraries(splash PRIVATE
   glad::glad
   glfw
   glm::glm
+  imgui::imgui
 )
 
 target_include_directories(splash PRIVATE
