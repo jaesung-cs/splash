@@ -14,6 +14,10 @@ find_package(nlohmann_json CONFIG REQUIRED)
 add_executable(splash
   src/main.cc
   src/splash/application.cc
+  src/splash/gl/texture.cc
+  src/splash/gl/shader.cc
+  src/splash/gl/geometry.cc
+  src/splash/model/image.cc
 )
 
 target_link_libraries(splash PRIVATE
