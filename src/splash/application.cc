@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
+#include <splash/model/camera.h>
 #include <splash/model/image.h>
 #include <splash/gl/shader.h>
 #include <splash/gl/texture.h>
@@ -23,6 +24,36 @@ namespace
 void errorCallback(int error, const char* description)
 {
   std::cerr << "Error: " << description << std::endl;
+}
+
+void resizeCallback(GLFWwindow* window, int width, int height)
+{
+  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+  application->resize(static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+}
+
+void cursorCallback(GLFWwindow* window, double xpos, double ypos)
+{
+  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+  application->cursor(static_cast<float>(xpos), static_cast<float>(ypos));
+}
+
+void mouseCallback(GLFWwindow* window, int button, int action, int mods)
+{
+  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+  application->mouse(button, action);
+}
+
+void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+{
+  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+  application->scroll(static_cast<float>(xoffset), static_cast<float>(yoffset));
+}
+
+void keyboardCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+  auto* application = static_cast<Application*>(glfwGetWindowUserPointer(window));
+  application->keyboard(key, action);
 }
 }
 
@@ -37,12 +68,21 @@ Application::Application()
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
   glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
+  width_ = 1600;
+  height_ = 900;
   window_ = glfwCreateWindow(width_, height_, "Splash", NULL, NULL);
   if (!window_)
     throw std::runtime_error("Failed to create window");
 
+  glfwSetWindowPos(window_, 300, 100);
+
   // Callbacks
   glfwSetWindowUserPointer(window_, this);
+  glfwSetWindowSizeCallback(window_, resizeCallback);
+  glfwSetCursorPosCallback(window_, cursorCallback);
+  glfwSetMouseButtonCallback(window_, mouseCallback);
+  glfwSetScrollCallback(window_, scrollCallback);
+  glfwSetKeyCallback(window_, keyboardCallback);
 
   glfwMakeContextCurrent(window_);
 
@@ -53,6 +93,57 @@ Application::Application()
 Application::~Application()
 {
   glfwTerminate();
+}
+
+void Application::resize(uint32_t width, uint32_t height)
+{
+  width_ = width;
+  height_ = height;
+}
+
+void Application::cursor(float x, float y)
+{
+  glm::vec2 delta = glm::vec2(x, y) - lastCursorPos_;
+  auto dx = static_cast<int>(delta.x);
+  auto dy = static_cast<int>(delta.y);
+
+  if (mouseButtons_[0] && !mouseButtons_[1])
+    camera_->rotateByPixels(dx, dy);
+  else if (!mouseButtons_[0] && mouseButtons_[1])
+    camera_->translateByPixels(dx, dy);
+  else if (mouseButtons_[0] && mouseButtons_[1])
+    camera_->zoomByPixels(dx, dy);
+
+  lastCursorPos_ = { x, y };
+}
+
+void Application::mouse(int button, int action)
+{
+  switch (button)
+  {
+  case GLFW_MOUSE_BUTTON_LEFT: button = 0; break;
+  case GLFW_MOUSE_BUTTON_RIGHT: button = 1; break;
+  default: button = 0; break;
+  }
+
+  bool pressed = false;
+  switch (action)
+  {
+  case GLFW_PRESS: pressed = true; break;
+  case GLFW_RELEASE: pressed = false; break;
+  }
+
+  mouseButtons_[button] = pressed;
+}
+
+void Application::scroll(float dx, float dy)
+{
+  camera_->zoomByScroll(dx, dy);
+}
+
+void Application::keyboard(int key, int action)
+{
+  // TODO
 }
 
 void Application::run()
@@ -82,7 +173,7 @@ void Application::run()
 
   // Floor geometry
   {
-    constexpr float floorLength = 100.f;
+    constexpr float floorLength = 10.f;
     std::vector<float> vertex{
       -floorLength, -floorLength, 0.f, 0.f, 0.f, 1.f, -floorLength, -floorLength,
       floorLength, -floorLength, 0.f, 0.f, 0.f, 1.f, floorLength, -floorLength,
@@ -103,6 +194,9 @@ void Application::run()
       }
     );
   }
+
+  // Camera
+  camera_ = std::make_unique<model::Camera>(60.f / 180.f * glm::pi<float>(), static_cast<float>(width_) / height_);
 
   while (!glfwWindowShouldClose(window_))
   {
@@ -128,10 +222,8 @@ void Application::draw()
 
   glm::mat4 model = glm::mat4(1.f);
   glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
-
-  // TODO
-  glm::mat4 view = glm::mat4(1.f);
-  glm::mat4 projection = glm::mat4(1.f);
+  glm::mat4 view = camera_->view();
+  glm::mat4 projection = camera_->projection();
 
   floorShader_->uniformMatrix4f("model", model);
   floorShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
