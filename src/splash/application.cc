@@ -165,12 +165,7 @@ void Application::run()
     animationTime += dt;
 
     glfwPollEvents();
-
     handleEvents();
-
-    updateParticles(animationTime);
-
-    updateLights();
 
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
@@ -186,6 +181,8 @@ void Application::run()
 
     ImGui::Render();
 
+    updateParticles(animationTime);
+    updateLights();
     draw();
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
