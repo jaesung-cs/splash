@@ -21,6 +21,9 @@ public:
   void done();
 
   void uniform1i(const std::string& name, int v);
+  void uniform1f(const std::string& name, float v);
+  void uniform3f(const std::string& name, const glm::vec3& v);
+  void uniform4f(const std::string& name, const glm::vec4& v);
   void uniformMatrix3f(const std::string& name, const glm::mat3& m);
   void uniformMatrix4f(const std::string& name, const glm::mat4& m);
 

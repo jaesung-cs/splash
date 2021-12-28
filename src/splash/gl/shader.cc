@@ -92,6 +92,21 @@ void Shader::uniform1i(const std::string& name, int v)
   glUniform1i(location(name), v);
 }
 
+void Shader::uniform1f(const std::string& name, float v)
+{
+  glUniform1f(location(name), v);
+}
+
+void Shader::uniform3f(const std::string& name, const glm::vec3& v)
+{
+  glUniform3fv(location(name), 1, glm::value_ptr(v));
+}
+
+void Shader::uniform4f(const std::string& name, const glm::vec4& v)
+{
+  glUniform4fv(location(name), 1, glm::value_ptr(v));
+}
+
 void Shader::uniformMatrix3f(const std::string& name, const glm::mat3& m)
 {
   glUniformMatrix3fv(location(name), 1, GL_FALSE, glm::value_ptr(m));

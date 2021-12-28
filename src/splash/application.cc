@@ -167,6 +167,8 @@ void Application::run()
 
     updateParticles(0.f);
 
+    updateLights();
+
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
@@ -247,6 +249,23 @@ void Application::updateParticles(float animationTime)
   particlesGeometry_->update(particles);
 }
 
+void Application::updateLights()
+{
+  lights_.resize(2);
+
+  // Eye camera
+  lights_[0].position = { camera_->eye(), 1.f };
+  lights_[0].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
+  lights_[0].diffuse = { 0.5f, 0.5f, 0.5f, 0.5f };
+  lights_[0].specular = { 0.1f, 0.1f, 0.1f, 1.f };
+
+  // Directional camera
+  lights_[1].position = { 0.f, 0.f, 1.f, 0.f };
+  lights_[1].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
+  lights_[1].diffuse = { 0.5f, 0.5f, 0.5f, 1.f };
+  lights_[1].specular = { 0.1f, 0.1f, 0.1f, 1.f };
+}
+
 void Application::draw()
 {
   glClearColor(0.75f, 0.75f, 0.75f, 1.f);
@@ -287,6 +306,21 @@ void Application::draw()
     particlesShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
     particlesShader_->uniformMatrix4f("view", view);
     particlesShader_->uniformMatrix4f("projection", projection);
+
+    constexpr float shininess = 16.f;
+    particlesShader_->uniform3f("eye", camera_->eye());
+    particlesShader_->uniform1f("shininess", shininess);
+    particlesShader_->uniform1i("numLights", lights_.size());
+    for (int i = 0; i < lights_.size(); i++)
+    {
+      const auto& light = lights_[i];
+      const std::string base = "lights[" + std::to_string(i) + "]";
+      particlesShader_->uniform4f(base + ".position", light.position);
+      particlesShader_->uniform4f(base + ".ambient", light.ambient);
+      particlesShader_->uniform4f(base + ".diffuse", light.diffuse);
+      particlesShader_->uniform4f(base + ".specular", light.specular);
+    }
+
     particlesGeometry_->draw();
 
     particlesShader_->done();

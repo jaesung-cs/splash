@@ -32,7 +32,7 @@ add_executable(splash
   include/splash/gl/texture.h
   include/splash/model/camera.h
   include/splash/model/image.h
-)
+  include/splash/model/light.h)
 
 target_link_libraries(splash PRIVATE
   glad::glad

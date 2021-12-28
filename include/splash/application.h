@@ -4,8 +4,11 @@
 #include <cstdint>
 #include <memory>
 #include <array>
+#include <vector>
 
 #include <glm/glm.hpp>
+
+#include <splash/model/light.h>
 
 struct GLFWwindow;
 
@@ -40,6 +43,7 @@ public:
 private:
   void handleEvents();
   void updateParticles(float animationTime);
+  void updateLights();
   void draw();
 
   GLFWwindow* window_ = nullptr;
@@ -58,6 +62,9 @@ private:
   static constexpr uint32_t particleCount_ = 16;
   std::unique_ptr<geom::Particles> particles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
+
+  // Lights
+  std::vector<model::Light> lights_;
 
   // UI
   float cameraSpeed_ = 3.f;

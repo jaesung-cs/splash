@@ -19,7 +19,7 @@ void main() {
   const vec4 worldPosition = model * vec4(center + position * radius, 1.f);
 
   gl_Position = projection * view * worldPosition;
-  vPosition = position.xyz;
+  vPosition = worldPosition.xyz;
   vNormal = mat3(modelInverseTranspose) * position;
   vColor = color;
 }
