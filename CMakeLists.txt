@@ -17,6 +17,7 @@ add_executable(splash
   src/splash/geom/particles.cc
   src/splash/geom/particles_bvh.cc
   src/splash/gl/geometry.cc
+  src/splash/gl/particles_geometry.cc
   src/splash/gl/shader.cc
   src/splash/gl/texture.cc
   src/splash/model/camera.cc
@@ -26,6 +27,7 @@ add_executable(splash
   include/splash/geom/particles.h
   include/splash/geom/particles_bvh.h
   include/splash/gl/geometry.h
+  include/splash/gl/particles_geometry.h
   include/splash/gl/shader.h
   include/splash/gl/texture.h
   include/splash/model/camera.h

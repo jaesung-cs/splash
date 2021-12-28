@@ -18,9 +18,11 @@
 
 #include <splash/model/camera.h>
 #include <splash/model/image.h>
+#include <splash/geom/particles.h>
 #include <splash/gl/shader.h>
 #include <splash/gl/texture.h>
 #include <splash/gl/geometry.h>
+#include <splash/gl/particles_geometry.h>
 
 namespace splash
 {
@@ -59,7 +61,9 @@ Application::Application()
   if (!gladLoadGL())
     throw std::runtime_error("Failed to initialize GL");
 
+  // Initialize OpenGL configurations
   glEnable(GL_MULTISAMPLE);
+  glEnable(GL_DEPTH_TEST);
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -83,14 +87,22 @@ Application::~Application()
   ImGui::DestroyContext();
 
   floorShader_ = nullptr;
+  particlesShader_ = nullptr;
+
   floorTexture_ = nullptr;
   floorGeometry_ = nullptr;
+  particlesGeometry_ = nullptr;
 
   glfwTerminate();
 }
 
 void Application::run()
 {
+  // Shaders
+  const std::string baseDirectory = "C:\\workspace\\splash\\src\\splash\\shader";
+  floorShader_ = std::make_unique<gl::Shader>(baseDirectory, "floor");
+  particlesShader_ = std::make_unique<gl::Shader>(baseDirectory, "particles");
+
   // Floor texture
   constexpr uint32_t floorPixelSize = 256;
   constexpr uint32_t border = 2;
@@ -110,9 +122,6 @@ void Application::run()
   }
 
   floorTexture_ = std::make_unique<gl::Texture>(floorImage);
-
-  // Floor shader
-  floorShader_ = std::make_unique<gl::Shader>("C:\\workspace\\splash\\src\\splash\\shader", "floor");
 
   // Floor geometry
   {
@@ -138,6 +147,10 @@ void Application::run()
     );
   }
 
+  // Particles
+  particles_ = std::make_unique<geom::Particles>(particleCount_);
+  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
+  
   // Camera
   camera_ = std::make_unique<model::Camera>(60.f / 180.f * glm::pi<float>(), static_cast<float>(width_) / height_);
 
@@ -151,6 +164,8 @@ void Application::run()
     glfwPollEvents();
 
     handleEvents();
+
+    updateParticles(0.f);
 
     // Start the Dear ImGui frame
     ImGui_ImplOpenGL3_NewFrame();
@@ -215,6 +230,23 @@ void Application::handleEvents()
   }
 }
 
+void Application::updateParticles(float animationTime)
+{
+  auto& particles = *particles_;
+
+  for (int i = 0; i < particleCount_; i++)
+  {
+    const auto t = static_cast<float>(i) / (particleCount_ - 1);
+    const auto x = static_cast<float>(i);
+
+    particles[i].position = { x, 0.f, 0.f };
+    particles[i].radius = t + 0.1f;
+    particles[i].color = { 0.f, 0.f, t };
+  }
+
+  particlesGeometry_->update(particles);
+}
+
 void Application::draw()
 {
   glClearColor(0.75f, 0.75f, 0.75f, 1.f);
@@ -222,19 +254,42 @@ void Application::draw()
 
   glViewport(0, 0, width_, height_);
 
-  floorShader_->use();
+  // Draw floor
+  {
+    floorShader_->use();
 
-  glm::mat4 model = glm::mat4(1.f);
-  glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
-  glm::mat4 view = camera_->view();
-  glm::mat4 projection = camera_->projection();
+    glm::mat4 model = glm::mat4(1.f);
+    glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
+    glm::mat4 view = camera_->view();
+    glm::mat4 projection = camera_->projection();
 
-  floorShader_->uniformMatrix4f("model", model);
-  floorShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
-  floorShader_->uniformMatrix4f("view", view);
-  floorShader_->uniformMatrix4f("projection", projection);
-  floorShader_->uniform1i("tex", 0);
-  floorTexture_->bind(0);
-  floorGeometry_->draw();
+    floorShader_->uniformMatrix4f("model", model);
+    floorShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
+    floorShader_->uniformMatrix4f("view", view);
+    floorShader_->uniformMatrix4f("projection", projection);
+    floorShader_->uniform1i("tex", 0);
+    floorTexture_->bind(0);
+    floorGeometry_->draw();
+
+    floorShader_->done();
+  }
+
+  // Draw particles
+  {
+    particlesShader_->use();
+
+    glm::mat4 model = glm::mat4(1.f);
+    glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
+    glm::mat4 view = camera_->view();
+    glm::mat4 projection = camera_->projection();
+
+    particlesShader_->uniformMatrix4f("model", model);
+    particlesShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
+    particlesShader_->uniformMatrix4f("view", view);
+    particlesShader_->uniformMatrix4f("projection", projection);
+    particlesGeometry_->draw();
+
+    particlesShader_->done();
+  }
 }
 }

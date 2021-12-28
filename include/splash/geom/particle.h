@@ -9,7 +9,11 @@ namespace geom
 {
 struct Particle
 {
-  glm::vec3 position;
+  alignas(16) glm::vec3 position;
+  float radius;
+
+  alignas(16) glm::vec3 color;
+  float pad0;
 };
 }
 }

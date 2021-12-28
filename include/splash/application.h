@@ -16,6 +16,12 @@ namespace gl
 class Shader;
 class Texture;
 class Geometry;
+class ParticlesGeometry;
+}
+
+namespace geom
+{
+class Particles;
 }
 
 namespace model
@@ -33,6 +39,7 @@ public:
 
 private:
   void handleEvents();
+  void updateParticles(float animationTime);
   void draw();
 
   GLFWwindow* window_ = nullptr;
@@ -43,8 +50,14 @@ private:
   std::unique_ptr<model::Camera> camera_;
 
   std::unique_ptr<gl::Shader> floorShader_;
+  std::unique_ptr<gl::Shader> particlesShader_;
+
   std::unique_ptr<gl::Texture> floorTexture_;
   std::unique_ptr<gl::Geometry> floorGeometry_;
+
+  static constexpr uint32_t particleCount_ = 16;
+  std::unique_ptr<geom::Particles> particles_;
+  std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
 
   // UI
   float cameraSpeed_ = 3.f;
