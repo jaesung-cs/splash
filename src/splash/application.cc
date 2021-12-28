@@ -155,17 +155,20 @@ void Application::run()
   camera_ = std::make_unique<model::Camera>(60.f / 180.f * glm::pi<float>(), static_cast<float>(width_) / height_);
 
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
+  float animationTime = 0.f;
   while (!glfwWindowShouldClose(window_))
   {
     auto now = std::chrono::high_resolution_clock::now();
     auto dt = std::chrono::duration<float>(now - lastTimestamp).count();
     lastTimestamp = now;
 
+    animationTime += dt;
+
     glfwPollEvents();
 
     handleEvents();
 
-    updateParticles(0.f);
+    updateParticles(animationTime);
 
     updateLights();
 
@@ -241,8 +244,12 @@ void Application::updateParticles(float animationTime)
     const auto t = static_cast<float>(i) / (particleCount_ - 1);
     const auto x = static_cast<float>(i);
 
-    particles[i].position = { x, 0.f, 0.f };
-    particles[i].radius = t + 0.1f;
+    constexpr float speed = 10.f;
+    const auto cosT = std::cos(animationTime * speed * t);
+    const auto sinT = std::sin(animationTime * speed * t);
+
+    particles[i].position = { t * cosT, t * sinT, t};
+    particles[i].radius = 0.1f * t;
     particles[i].color = { 0.f, 0.f, t };
   }
 

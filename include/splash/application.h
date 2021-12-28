@@ -59,7 +59,7 @@ private:
   std::unique_ptr<gl::Texture> floorTexture_;
   std::unique_ptr<gl::Geometry> floorGeometry_;
 
-  static constexpr uint32_t particleCount_ = 16;
+  static constexpr uint32_t particleCount_ = 128;
   std::unique_ptr<geom::Particles> particles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
 
