@@ -11,7 +11,7 @@ class Camera
 {
 public:
   Camera() = delete;
-  Camera(float fov, float aspect);
+  explicit Camera(float fov);
   ~Camera();
 
   void setAspect(float aspect) noexcept { aspect_ = aspect; }

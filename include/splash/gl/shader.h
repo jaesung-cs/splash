@@ -17,6 +17,22 @@ public:
   Shader(const std::string& dirpath, const std::string& name);
   ~Shader();
 
+  Shader(const Shader& rhs) = delete;
+  Shader& operator = (const Shader& rhs) = delete;
+
+  Shader(Shader&& rhs) noexcept
+  {
+    program_ = rhs.program_;
+    rhs.program_ = 0;
+  }
+
+  Shader& operator = (Shader&& rhs) noexcept
+  {
+    program_ = rhs.program_;
+    rhs.program_ = 0;
+    return *this;
+  }
+
   void use();
   void done();
 

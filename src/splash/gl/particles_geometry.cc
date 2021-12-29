@@ -107,10 +107,10 @@ ParticlesGeometry::~ParticlesGeometry()
 
 void ParticlesGeometry::update(const geom::Particles& particles)
 {
-  const auto n = std::min(particleCount_, particles.size());
+  particleCount_ = particles.size();
 
   glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer_);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, n * sizeof(geom::Particle), &particles[0]);
+  glBufferSubData(GL_ARRAY_BUFFER, 0, particleCount_ * sizeof(geom::Particle), &particles[0]);
   glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 

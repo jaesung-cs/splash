@@ -8,15 +8,13 @@
 
 #include <glm/glm.hpp>
 
-#include <splash/model/light.h>
-
 struct GLFWwindow;
 
 namespace splash
 {
 namespace gl
 {
-class Shader;
+class Shaders;
 class Texture;
 class Geometry;
 class ParticlesGeometry;
@@ -25,6 +23,12 @@ class ParticlesGeometry;
 namespace geom
 {
 class Particles;
+}
+
+namespace scene
+{
+class Scene;
+class Resources;
 }
 
 namespace model
@@ -41,33 +45,25 @@ public:
   void run();
 
 private:
+  void initializeScenes();
+
   void handleEvents();
-  void updateParticles(float animationTime);
   void updateLights();
-  void draw();
 
   GLFWwindow* window_ = nullptr;
 
   uint32_t width_ = 1600;
   uint32_t height_ = 900;
 
-  std::unique_ptr<model::Camera> camera_;
-
-  std::unique_ptr<gl::Shader> floorShader_;
-  std::unique_ptr<gl::Shader> particlesShader_;
-
-  std::unique_ptr<gl::Texture> floorTexture_;
-  std::unique_ptr<gl::Geometry> floorGeometry_;
-
-  static constexpr uint32_t particleCount_ = 128;
-  std::unique_ptr<geom::Particles> particles_;
-  std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
-
-  // Lights
-  std::vector<model::Light> lights_;
+  std::unique_ptr<gl::Shaders> shaders_;
+  std::unique_ptr<scene::Resources> resources_;
 
   // UI
   float cameraSpeed_ = 3.f;
+
+  // Scenes
+  int sceneIndex_ = 0;
+  std::vector<std::unique_ptr<scene::Scene>> scenes_;
 };
 }
 

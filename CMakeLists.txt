@@ -19,9 +19,14 @@ add_executable(splash
   src/splash/gl/geometry.cc
   src/splash/gl/particles_geometry.cc
   src/splash/gl/shader.cc
+  src/splash/gl/shaders.cc
   src/splash/gl/texture.cc
   src/splash/model/camera.cc
   src/splash/model/image.cc
+  src/splash/scene/resources.cc
+  src/splash/scene/scene.cc
+  src/splash/scene/scene_animation.cc
+  src/splash/scene/scene_particles.cc
   include/splash/application.h
   include/splash/geom/particle.h
   include/splash/geom/particles.h
@@ -29,10 +34,16 @@ add_executable(splash
   include/splash/gl/geometry.h
   include/splash/gl/particles_geometry.h
   include/splash/gl/shader.h
+  include/splash/gl/shaders.h
   include/splash/gl/texture.h
   include/splash/model/camera.h
   include/splash/model/image.h
-  include/splash/model/light.h)
+  include/splash/model/light.h
+  include/splash/scene/resources.h
+  include/splash/scene/scene.h
+  include/splash/scene/scene_animation.h
+  include/splash/scene/scene_particles.h
+)
 
 target_link_libraries(splash PRIVATE
   glad::glad

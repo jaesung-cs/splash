@@ -19,10 +19,13 @@
 #include <splash/model/camera.h>
 #include <splash/model/image.h>
 #include <splash/geom/particles.h>
-#include <splash/gl/shader.h>
+#include <splash/gl/shaders.h>
 #include <splash/gl/texture.h>
 #include <splash/gl/geometry.h>
 #include <splash/gl/particles_geometry.h>
+#include <splash/scene/resources.h>
+#include <splash/scene/scene_animation.h>
+#include <splash/scene/scene_particles.h>
 
 namespace splash
 {
@@ -86,83 +89,37 @@ Application::~Application()
   ImGui_ImplGlfw_Shutdown();
   ImGui::DestroyContext();
 
-  floorShader_ = nullptr;
-  particlesShader_ = nullptr;
+  shaders_ = nullptr;
+  resources_ = nullptr;
 
-  floorTexture_ = nullptr;
-  floorGeometry_ = nullptr;
-  particlesGeometry_ = nullptr;
+  scenes_.clear();
 
   glfwTerminate();
+}
+
+void Application::initializeScenes()
+{
+  scenes_.push_back(std::make_unique<scene::SceneParticles>(*resources_, *shaders_));
+  scenes_.push_back(std::make_unique<scene::SceneAnimation>());
 }
 
 void Application::run()
 {
   // Shaders
-  const std::string baseDirectory = "C:\\workspace\\splash\\src\\splash\\shader";
-  floorShader_ = std::make_unique<gl::Shader>(baseDirectory, "floor");
-  particlesShader_ = std::make_unique<gl::Shader>(baseDirectory, "particles");
+  shaders_ = std::make_unique<gl::Shaders>();
 
-  // Floor texture
-  constexpr uint32_t floorPixelSize = 256;
-  constexpr uint32_t border = 2;
-  model::Image floorImage(floorPixelSize, floorPixelSize, 3);
-  for (int i = 0; i < floorPixelSize; i++)
-  {
-    for (int j = 0; j < floorPixelSize; j++)
-    {
-      uint32_t color = 192;
-      if (i < border || i >= floorPixelSize - border ||
-        j < border || j >= floorPixelSize - border)
-        color = 16;
+  // Resources
+  resources_ = std::make_unique<scene::Resources>();
 
-      for (int c = 0; c < 3; c++)
-        floorImage(i, j, c) = color;
-    }
-  }
-
-  floorTexture_ = std::make_unique<gl::Texture>(floorImage);
-
-  // Floor geometry
-  {
-    constexpr float floorLength = 10.f;
-    std::vector<float> vertex{
-      -floorLength, -floorLength, 0.f, 0.f, 0.f, 1.f, -floorLength, -floorLength,
-      floorLength, -floorLength, 0.f, 0.f, 0.f, 1.f, floorLength, -floorLength,
-      -floorLength, floorLength, 0.f, 0.f, 0.f, 1.f, -floorLength, floorLength,
-      floorLength, floorLength, 0.f, 0.f, 0.f, 1.f, floorLength, floorLength,
-    };
-
-    std::vector<uint32_t> index{
-      0, 1, 2, 2, 1, 3,
-    };
-
-    floorGeometry_ = std::make_unique<gl::Geometry>(
-      vertex, index,
-      std::initializer_list<gl::Attribute>{
-        { 0, 3, 8, 0 },
-        { 1, 3, 8, 3 },
-        { 2, 2, 8, 6 },
-      }
-    );
-  }
-
-  // Particles
-  particles_ = std::make_unique<geom::Particles>(particleCount_);
-  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
-  
-  // Camera
-  camera_ = std::make_unique<model::Camera>(60.f / 180.f * glm::pi<float>(), static_cast<float>(width_) / height_);
+  // Initialize scenes
+  initializeScenes();
 
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
-  float animationTime = 0.f;
   while (!glfwWindowShouldClose(window_))
   {
     auto now = std::chrono::high_resolution_clock::now();
     auto dt = std::chrono::duration<float>(now - lastTimestamp).count();
     lastTimestamp = now;
-
-    animationTime += dt;
 
     glfwPollEvents();
     handleEvents();
@@ -174,16 +131,44 @@ void Application::run()
 
     if (ImGui::Begin("Control"))
     {
-      if (ImGui::Button("Hello World"))
-        std::cout << "Hello World!" << std::endl;
+      const auto currentSceneName = scenes_[sceneIndex_]->name();
+      if (ImGui::BeginCombo("Scene", currentSceneName.c_str()))
+      {
+        for (int i = 0; i < scenes_.size(); i++)
+        {
+          const auto name = scenes_[i]->name();
+          bool isSelected = false;
+          if (ImGui::Selectable(name.c_str(), &isSelected))
+            sceneIndex_ = i;
+
+          if (isSelected)
+            ImGui::SetItemDefaultFocus();
+        }
+
+        ImGui::EndCombo();
+      }
+
+      ImGui::Separator();
+
+      // Draw per-scene UI
+      if (ImGui::CollapsingHeader("Scene Control", ImGuiTreeNodeFlags_DefaultOpen))
+      {
+        scenes_[sceneIndex_]->drawUi();
+      }
+
+      ImGui::Separator();
     }
     ImGui::End();
 
     ImGui::Render();
 
-    updateParticles(animationTime);
     updateLights();
-    draw();
+
+    glClearColor(0.75f, 0.75f, 0.75f, 1.f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport(0, 0, width_, height_);
+
+    scenes_[sceneIndex_]->draw();
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -198,10 +183,12 @@ void Application::handleEvents()
 {
   const auto& io = ImGui::GetIO();
 
+  auto& camera = resources_->camera();
+
   // Resize
   width_ = io.DisplaySize[0];
   height_ = io.DisplaySize[1];
-  camera_->setAspect(static_cast<float>(width_) / height_);
+  camera.setAspect(static_cast<float>(width_) / height_);
 
   // Mouse
   if (!io.WantCaptureMouse && io.MousePos.x != -FLT_MAX && io.MousePos.y != -FLT_MAX)
@@ -210,124 +197,45 @@ void Application::handleEvents()
     auto dy = static_cast<int>(io.MouseDelta.y);
 
     if (io.MouseDown[0] && !io.MouseDown[1])
-      camera_->rotateByPixels(dx, dy);
+      camera.rotateByPixels(dx, dy);
     else if (!io.MouseDown[0] && io.MouseDown[1])
-      camera_->translateByPixels(dx, dy);
+      camera.translateByPixels(dx, dy);
     else if (io.MouseDown[0] && io.MouseDown[1])
-      camera_->zoomByPixels(dx, dy);
+      camera.zoomByPixels(dx, dy);
   }
 
   // Scroll
-  camera_->zoomByScroll(io.MouseWheelH, io.MouseWheel);
+  camera.zoomByScroll(io.MouseWheelH, io.MouseWheel);
 
   // Keyboard
   if (!io.WantCaptureKeyboard)
   {
     const auto dt = io.DeltaTime;
-    if (io.KeysDown['W']) camera_->moveForward(dt * cameraSpeed_ * camera_->distance());
-    if (io.KeysDown['S']) camera_->moveForward(-dt * cameraSpeed_ * camera_->distance());
-    if (io.KeysDown['A']) camera_->moveRight(-dt * cameraSpeed_ * camera_->distance());
-    if (io.KeysDown['D']) camera_->moveRight(dt * cameraSpeed_ * camera_->distance());
-    if (io.KeysDown[' ']) camera_->moveUp(dt * cameraSpeed_ * camera_->distance());
+    if (io.KeysDown['W']) camera.moveForward(dt * cameraSpeed_ * camera.distance());
+    if (io.KeysDown['S']) camera.moveForward(-dt * cameraSpeed_ * camera.distance());
+    if (io.KeysDown['A']) camera.moveRight(-dt * cameraSpeed_ * camera.distance());
+    if (io.KeysDown['D']) camera.moveRight(dt * cameraSpeed_ * camera.distance());
+    if (io.KeysDown[' ']) camera.moveUp(dt * cameraSpeed_ * camera.distance());
   }
-}
-
-void Application::updateParticles(float animationTime)
-{
-  auto& particles = *particles_;
-
-  for (int i = 0; i < particleCount_; i++)
-  {
-    const auto t = static_cast<float>(i) / (particleCount_ - 1);
-    const auto x = static_cast<float>(i);
-
-    constexpr float speed = 10.f;
-    const auto cosT = std::cos(animationTime * speed * t);
-    const auto sinT = std::sin(animationTime * speed * t);
-
-    particles[i].position = { t * cosT, t * sinT, t};
-    particles[i].radius = 0.1f * t;
-    particles[i].color = { 0.f, 0.f, t };
-  }
-
-  particlesGeometry_->update(particles);
 }
 
 void Application::updateLights()
 {
-  lights_.resize(2);
+  auto& camera = resources_->camera();
+  auto& lights = resources_->lights();
+
+  lights.resize(2);
 
   // Eye camera
-  lights_[0].position = { camera_->eye(), 1.f };
-  lights_[0].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
-  lights_[0].diffuse = { 0.5f, 0.5f, 0.5f, 0.5f };
-  lights_[0].specular = { 0.1f, 0.1f, 0.1f, 1.f };
+  lights[0].position = { camera.eye(), 1.f };
+  lights[0].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
+  lights[0].diffuse = { 0.5f, 0.5f, 0.5f, 0.5f };
+  lights[0].specular = { 0.1f, 0.1f, 0.1f, 1.f };
 
   // Directional camera
-  lights_[1].position = { 0.f, 0.f, 1.f, 0.f };
-  lights_[1].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
-  lights_[1].diffuse = { 0.5f, 0.5f, 0.5f, 1.f };
-  lights_[1].specular = { 0.1f, 0.1f, 0.1f, 1.f };
-}
-
-void Application::draw()
-{
-  glClearColor(0.75f, 0.75f, 0.75f, 1.f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-  glViewport(0, 0, width_, height_);
-
-  // Draw floor
-  {
-    floorShader_->use();
-
-    glm::mat4 model = glm::mat4(1.f);
-    glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
-    glm::mat4 view = camera_->view();
-    glm::mat4 projection = camera_->projection();
-
-    floorShader_->uniformMatrix4f("model", model);
-    floorShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
-    floorShader_->uniformMatrix4f("view", view);
-    floorShader_->uniformMatrix4f("projection", projection);
-    floorShader_->uniform1i("tex", 0);
-    floorTexture_->bind(0);
-    floorGeometry_->draw();
-
-    floorShader_->done();
-  }
-
-  // Draw particles
-  {
-    particlesShader_->use();
-
-    glm::mat4 model = glm::mat4(1.f);
-    glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
-    glm::mat4 view = camera_->view();
-    glm::mat4 projection = camera_->projection();
-
-    particlesShader_->uniformMatrix4f("model", model);
-    particlesShader_->uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
-    particlesShader_->uniformMatrix4f("view", view);
-    particlesShader_->uniformMatrix4f("projection", projection);
-
-    constexpr float shininess = 16.f;
-    particlesShader_->uniform3f("eye", camera_->eye());
-    particlesShader_->uniform1f("shininess", shininess);
-    particlesShader_->uniform1i("numLights", lights_.size());
-    for (int i = 0; i < lights_.size(); i++)
-    {
-      const auto& light = lights_[i];
-      const std::string base = "lights[" + std::to_string(i) + "]";
-      particlesShader_->uniform4f(base + ".position", light.position);
-      particlesShader_->uniform4f(base + ".ambient", light.ambient);
-      particlesShader_->uniform4f(base + ".diffuse", light.diffuse);
-      particlesShader_->uniform4f(base + ".specular", light.specular);
-    }
-
-    particlesGeometry_->draw();
-
-    particlesShader_->done();
-  }
+  lights[1].position = { 0.f, 0.f, 1.f, 0.f };
+  lights[1].ambient = { 0.1f, 0.1f, 0.1f, 1.f };
+  lights[1].diffuse = { 0.5f, 0.5f, 0.5f, 1.f };
+  lights[1].specular = { 0.1f, 0.1f, 0.1f, 1.f };
 }
 }

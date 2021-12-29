@@ -9,9 +9,8 @@ namespace splash
 {
 namespace model
 {
-Camera::Camera(float fov, float aspect)
+Camera::Camera(float fov)
   : fov_(fov)
-  , aspect_(aspect)
 {
 }
 
