@@ -2,6 +2,10 @@
 
 #include <glad/glad.h>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include <splash/model/camera.h>
 #include <splash/model/box.h>
 #include <splash/scene/resources.h>
@@ -39,6 +43,7 @@ std::string SceneParticles::name() const
 
 void SceneParticles::drawUi()
 {
+  ImGui::Checkbox("Draw boxes", &drawBoxes_);
 }
 
 void SceneParticles::draw()
@@ -108,6 +113,7 @@ void SceneParticles::draw()
   }
 
   // Draw boxes
+  if (drawBoxes_)
   {
     auto& boxesShader = (*shaders_)["boxes"];
     boxesShader.use();
@@ -149,21 +155,23 @@ void SceneParticles::updateParticles(float animationTime)
   particlesGeometry_->update(particles);
 
   // Update boxes
-  std::vector<model::Box> boxes;
-  for (int i = 0; i < particleCount_; i++)
+  if (drawBoxes_)
   {
-    const auto& p = particles[i].position;
-    const auto r = particles[i].radius;
+    std::vector<model::Box> boxes;
+    for (int i = 0; i < particleCount_; i++)
+    {
+      const auto& p = particles[i].position;
+      const auto r = particles[i].radius;
 
-    model::Box box;
-    box.min = p - glm::vec3(r);
-    box.max = p + glm::vec3(r);
-    boxes.push_back(box);
+      model::Box box;
+      box.min = p - glm::vec3(r);
+      box.max = p + glm::vec3(r);
+      boxes.push_back(box);
+    }
+
+    glm::vec3 boxColor(0.25f, 0.25f, 1.f);
+    boxesGeometry_->update(boxes, boxColor);
   }
-
-  glm::vec3 boxColor(0.25f, 0.25f, 1.f);
-  boxesGeometry_->update(boxes, boxColor);
 }
-
 }
 }

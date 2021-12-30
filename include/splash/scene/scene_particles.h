@@ -36,8 +36,8 @@ public:
   void draw() override;
 
 private:
-  Resources* resources_;
-  gl::Shaders* shaders_;
+  Resources* resources_ = nullptr;
+  gl::Shaders* shaders_ = nullptr;
 
   void updateParticles(float animationTime);
 
@@ -46,6 +46,9 @@ private:
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
 
   std::unique_ptr<gl::BoxesGeometry> boxesGeometry_;
+
+  // Rendering options
+  bool drawBoxes_ = false;
 };
 }
 }
