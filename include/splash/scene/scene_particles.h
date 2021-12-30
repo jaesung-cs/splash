@@ -3,6 +3,7 @@
 
 #include <splash/scene/scene.h>
 
+#include <chrono>
 #include <memory>
 
 namespace splash
@@ -47,8 +48,13 @@ private:
 
   std::unique_ptr<gl::BoxesGeometry> boxesGeometry_;
 
+  // Animation
+  float animationTime_ = 0.f;
+  std::chrono::high_resolution_clock::time_point lastTime_;
+
   // Rendering options
   bool drawBoxes_ = false;
+  bool animation_ = true;
 };
 }
 }

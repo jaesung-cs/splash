@@ -32,6 +32,9 @@ SceneParticles::SceneParticles(Resources* resources, gl::Shaders* shaders)
 
   // Boxes
   boxesGeometry_ = std::make_unique<gl::BoxesGeometry>(particleCount_);
+
+  // Animation
+  lastTime_ = std::chrono::high_resolution_clock::now();
 }
 
 SceneParticles::~SceneParticles() = default;
@@ -44,11 +47,19 @@ std::string SceneParticles::name() const
 void SceneParticles::drawUi()
 {
   ImGui::Checkbox("Draw boxes", &drawBoxes_);
+  ImGui::Checkbox("Animation", &animation_);
 }
 
 void SceneParticles::draw()
 {
-  updateParticles(0.f);
+  const auto now = std::chrono::high_resolution_clock::now();
+  const auto dt = std::chrono::duration<float>(now - lastTime_).count();
+  lastTime_ = now;
+
+  if (animation_)
+    animationTime_ += dt;
+
+  updateParticles(animationTime_);
 
   auto& camera = resources_->camera();
 
