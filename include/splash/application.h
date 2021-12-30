@@ -27,7 +27,6 @@ class Particles;
 
 namespace scene
 {
-class Scene;
 class Resources;
 }
 
@@ -45,8 +44,6 @@ public:
   void run();
 
 private:
-  void initializeScenes();
-
   void handleEvents();
   void updateLights();
 
@@ -60,10 +57,6 @@ private:
 
   // UI
   float cameraSpeed_ = 3.f;
-
-  // Scenes
-  int sceneIndex_ = 0;
-  std::vector<std::unique_ptr<scene::Scene>> scenes_;
 };
 }
 

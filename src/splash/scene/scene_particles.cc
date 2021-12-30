@@ -15,7 +15,7 @@ namespace splash
 {
 namespace scene
 {
-SceneParticles::SceneParticles(Resources& resources, gl::Shaders& shaders)
+SceneParticles::SceneParticles(Resources* resources, gl::Shaders* shaders)
   : Scene()
   , resources_(resources)
   , shaders_(shaders)
@@ -40,11 +40,11 @@ void SceneParticles::draw()
 {
   updateParticles(0.f);
 
-  auto& camera = resources_.camera();
+  auto& camera = resources_->camera();
 
   // Draw floor
   {
-    auto& floorShader = shaders_["floor"];
+    auto& floorShader = (*shaders_)["floor"];
     floorShader.use();
 
     glm::mat4 model = glm::mat4(1.f);
@@ -52,8 +52,8 @@ void SceneParticles::draw()
     glm::mat4 view = camera.view();
     glm::mat4 projection = camera.projection();
 
-    auto& floorTexture = resources_.floorTexture();
-    auto& floorGeometry = resources_.floorGeometry();
+    auto& floorTexture = resources_->floorTexture();
+    auto& floorGeometry = resources_->floorGeometry();
 
     floorShader.uniformMatrix4f("model", model);
     floorShader.uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
@@ -68,7 +68,7 @@ void SceneParticles::draw()
 
   // Draw particles
   {
-    auto& particlesShader = shaders_["particles"];
+    auto& particlesShader = (*shaders_)["particles"];
     particlesShader.use();
 
     glm::mat4 model = glm::mat4(1.f);
@@ -76,7 +76,7 @@ void SceneParticles::draw()
     glm::mat4 view = camera.view();
     glm::mat4 projection = camera.projection();
 
-    const auto& lights = resources_.lights();
+    const auto& lights = resources_->lights();
 
     particlesShader.uniformMatrix4f("model", model);
     particlesShader.uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);

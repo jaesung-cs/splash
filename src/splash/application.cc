@@ -92,15 +92,7 @@ Application::~Application()
   shaders_ = nullptr;
   resources_ = nullptr;
 
-  scenes_.clear();
-
   glfwTerminate();
-}
-
-void Application::initializeScenes()
-{
-  scenes_.push_back(std::make_unique<scene::SceneParticles>(*resources_, *shaders_));
-  scenes_.push_back(std::make_unique<scene::SceneAnimation>());
 }
 
 void Application::run()
@@ -112,7 +104,12 @@ void Application::run()
   resources_ = std::make_unique<scene::Resources>();
 
   // Initialize scenes
-  initializeScenes();
+  std::vector<std::string> scenes{
+    "Particles",
+    "Animation",
+  };
+  std::unique_ptr<scene::Scene> scene;
+  scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
 
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
   while (!glfwWindowShouldClose(window_))
@@ -129,20 +126,35 @@ void Application::run()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
+    static int sceneIndex = 0;
     if (ImGui::Begin("Control"))
     {
-      const auto currentSceneName = scenes_[sceneIndex_]->name();
+      const auto currentSceneName = scenes[sceneIndex];
       if (ImGui::BeginCombo("Scene", currentSceneName.c_str()))
       {
-        for (int i = 0; i < scenes_.size(); i++)
+        int selected = -1;
+        for (int i = 0; i < scenes.size(); i++)
         {
-          const auto name = scenes_[i]->name();
           bool isSelected = false;
-          if (ImGui::Selectable(name.c_str(), &isSelected))
-            sceneIndex_ = i;
+          if (ImGui::Selectable(scenes[i].c_str(), &isSelected))
+            selected = i;
 
           if (isSelected)
             ImGui::SetItemDefaultFocus();
+        }
+
+        if (selected != -1 && sceneIndex != selected)
+        {
+          sceneIndex = selected;
+          switch (sceneIndex)
+          {
+          case 0:
+            scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+            break;
+          case 1:
+            scene = nullptr;
+            break;
+          }
         }
 
         ImGui::EndCombo();
@@ -153,7 +165,8 @@ void Application::run()
       // Draw per-scene UI
       if (ImGui::CollapsingHeader("Scene Control", ImGuiTreeNodeFlags_DefaultOpen))
       {
-        scenes_[sceneIndex_]->drawUi();
+        if (scene)
+          scene->drawUi();
       }
 
       ImGui::Separator();
@@ -168,7 +181,8 @@ void Application::run()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glViewport(0, 0, width_, height_);
 
-    scenes_[sceneIndex_]->draw();
+    if (scene)
+      scene->draw();
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 

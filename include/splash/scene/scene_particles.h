@@ -26,7 +26,7 @@ class SceneParticles final : public Scene
 {
 public:
   SceneParticles() = delete;
-  explicit SceneParticles(Resources& resources, gl::Shaders& shaders);
+  explicit SceneParticles(Resources* resources, gl::Shaders* shaders);
   ~SceneParticles() override;
 
   std::string name() const override;
@@ -35,8 +35,8 @@ public:
   void draw() override;
 
 private:
-  Resources& resources_;
-  gl::Shaders& shaders_;
+  Resources* resources_;
+  gl::Shaders* shaders_;
 
   void updateParticles(float animationTime);
 
