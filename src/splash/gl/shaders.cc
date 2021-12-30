@@ -14,6 +14,7 @@ Shaders::Shaders()
 
   shaders_.emplace("floor", Shader(baseDirectory, "floor"));
   shaders_.emplace("particles", Shader(baseDirectory, "particles"));
+  shaders_.emplace("boxes", Shader(baseDirectory, "boxes"));
 }
 
 Shaders::~Shaders()

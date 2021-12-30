@@ -16,6 +16,7 @@ namespace gl
 {
 class Shaders;
 class ParticlesGeometry;
+class BoxesGeometry;
 }
 
 namespace scene
@@ -43,6 +44,8 @@ private:
   static constexpr uint32_t particleCount_ = 128;
   std::unique_ptr<geom::Particles> particles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
+
+  std::unique_ptr<gl::BoxesGeometry> boxesGeometry_;
 };
 }
 }
