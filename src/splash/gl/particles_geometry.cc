@@ -83,7 +83,7 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
   // Allocate instance buffer data
   glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer_);
   glBufferData(GL_ARRAY_BUFFER, n * sizeof(geom::Particle), NULL, GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), 0);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), 0);
   glVertexAttribDivisor(1, 1);
   glEnableVertexAttribArray(1);
   glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));

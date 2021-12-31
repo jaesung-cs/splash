@@ -104,6 +104,8 @@ void SceneParticles::draw()
     particlesShader.uniformMatrix4f("view", view);
     particlesShader.uniformMatrix4f("projection", projection);
 
+    particlesShader.uniform1f("radius", particles_->radius());
+
     constexpr float shininess = 16.f;
     particlesShader.uniform3f("eye", camera.eye());
     particlesShader.uniform1f("shininess", shininess);
@@ -149,6 +151,7 @@ void SceneParticles::updateParticles(float animationTime)
 {
   auto& particles = *particles_;
 
+  particles.radius() = 0.1f;
   for (int i = 0; i < particleCount_; i++)
   {
     const auto t = static_cast<float>(i) / (particleCount_ - 1);
@@ -159,7 +162,6 @@ void SceneParticles::updateParticles(float animationTime)
     const auto sinT = std::sin(animationTime * speed * t);
 
     particles[i].position = { t * cosT, t * sinT, t };
-    particles[i].radius = 0.1f * t;
     particles[i].color = { 0.f, 0.f, t };
   }
 
@@ -168,11 +170,12 @@ void SceneParticles::updateParticles(float animationTime)
   // Update boxes
   if (drawBoxes_)
   {
+    const auto r = particles.radius();
+
     std::vector<model::Box> boxes;
     for (int i = 0; i < particleCount_; i++)
     {
       const auto& p = particles[i].position;
-      const auto r = particles[i].radius;
 
       model::Box box;
       box.min = p - glm::vec3(r);
