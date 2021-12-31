@@ -151,7 +151,7 @@ void SceneParticles::updateParticles(float animationTime)
 {
   auto& particles = *particles_;
 
-  particles.radius() = 0.1f;
+  particles.radius() = 0.05f;
   for (int i = 0; i < particleCount_; i++)
   {
     const auto t = static_cast<float>(i) / (particleCount_ - 1);

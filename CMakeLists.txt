@@ -14,6 +14,9 @@ find_package(imgui CONFIG REQUIRED)
 add_executable(splash
   src/main.cc
   src/splash/application.cc
+  src/splash/fluid/neighbor_search.cc
+  src/splash/fluid/neighbor_search_naive.cc
+  src/splash/fluid/neighbor_search_spatial_hashing.cc
   src/splash/geom/particles.cc
   src/splash/geom/particles_bvh.cc
   src/splash/gl/boxes_geometry.cc
@@ -27,8 +30,13 @@ add_executable(splash
   src/splash/scene/resources.cc
   src/splash/scene/scene.cc
   src/splash/scene/scene_animation.cc
+  src/splash/scene/scene_fluid.cc
   src/splash/scene/scene_particles.cc
   include/splash/application.h
+  include/splash/fluid/neighbor.h
+  include/splash/fluid/neighbor_search.h
+  include/splash/fluid/neighbor_search_naive.h
+  include/splash/fluid/neighbor_search_spatial_hashing.h
   include/splash/geom/particle.h
   include/splash/geom/particles.h
   include/splash/geom/particles_bvh.h
@@ -45,6 +53,7 @@ add_executable(splash
   include/splash/scene/resources.h
   include/splash/scene/scene.h
   include/splash/scene/scene_animation.h
+  include/splash/scene/scene_fluid.h
   include/splash/scene/scene_particles.h
 )
 

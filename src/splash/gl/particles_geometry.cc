@@ -18,7 +18,7 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
   glGenBuffers(1, &instanceBuffer_);
 
   // Create sphere buffer and index
-  constexpr uint32_t segments = 16;
+  constexpr uint32_t segments = 8;
   constexpr float pi = 3.1415926535897932384626433832795f;
   std::vector<float> buffer;
   std::vector<uint32_t> index;

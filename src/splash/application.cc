@@ -24,8 +24,9 @@
 #include <splash/gl/geometry.h>
 #include <splash/gl/particles_geometry.h>
 #include <splash/scene/resources.h>
-#include <splash/scene/scene_animation.h>
 #include <splash/scene/scene_particles.h>
+#include <splash/scene/scene_fluid.h>
+#include <splash/scene/scene_animation.h>
 
 namespace splash
 {
@@ -106,7 +107,8 @@ void Application::run()
   // Initialize scenes
   std::vector<std::string> scenes{
     "Particles",
-    "Animation",
+    "Fluid",
+    "(empty)",
   };
   std::unique_ptr<scene::Scene> scene;
   scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
@@ -152,6 +154,9 @@ void Application::run()
             scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
             break;
           case 1:
+            scene = std::make_unique<scene::SceneFluid>(resources_.get(), shaders_.get());
+            break;
+          case 2:
             scene = nullptr;
             break;
           }
