@@ -2,6 +2,10 @@
 
 #include <iostream>
 
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include <splash/gl/shaders.h>
 #include <splash/gl/shader.h>
 #include <splash/gl/texture.h>
@@ -22,17 +26,32 @@ SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
 {
   particles_ = std::make_unique<geom::Particles>(particleCount_);
   particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
+
+  lastTime_ = std::chrono::high_resolution_clock::now();
+
+  initializeParticles();
 }
 
 SceneFluid::~SceneFluid() = default;
 
 void SceneFluid::drawUi()
 {
+  if (ImGui::Button("Initialize"))
+    initializeParticles();
+
+  ImGui::Checkbox("Animation", &animation_);
 }
 
 void SceneFluid::draw()
 {
-  updateParticles();
+  const auto now = std::chrono::high_resolution_clock::now();
+  const auto dt = std::chrono::duration<float>(now - lastTime_).count();
+  lastTime_ = now;
+
+  if (animation_)
+    animationTime_ += dt;
+
+  updateParticles(dt);
 
   auto& camera = resources_->camera();
 
@@ -99,11 +118,19 @@ void SceneFluid::draw()
   }
 }
 
-void SceneFluid::updateParticles()
+void SceneFluid::initializeParticles()
 {
+  auto& particles = *particles_;
   constexpr float radius = 1.f / particleSide_;
 
-  particles_->radius() = radius;
+  particles.radius() = radius;
+
+  constexpr float pi = 3.1415926535897932384626433832795f;
+  constexpr float density = 997.f;
+  const auto volume = 4.f / 3.f * pi * radius * radius * radius;
+  const auto mass = density * volume;
+
+  constexpr float baseHeight = 1.f;
 
   for (int i = 0; i < particleSide_; i++)
   {
@@ -117,10 +144,30 @@ void SceneFluid::updateParticles()
 
         const auto index = i * particleSide_ * particleSide_ + j * particleSide_ + k;
 
-        auto& particle = (*particles_)[index];
-        particle.position = { u, v, w };
+        auto& particle = particles[index];
+        particle.position = { u, v, w + baseHeight };
+        particle.mass = mass;
+        particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
       }
+    }
+  }
+}
+
+void SceneFluid::updateParticles(float dt)
+{
+  auto& particles = *particles_;
+  const auto radius = particles_->radius();
+
+  if (animation_)
+  {
+    constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
+
+    for (int i = 0; i < particleCount_; i++)
+    {
+      particles[i].velocity += gravity * dt;
+      particles[i].position += particles[i].velocity * dt;
+      particles[i].position.z = std::max(particles[i].position.z, 0.f);
     }
   }
 

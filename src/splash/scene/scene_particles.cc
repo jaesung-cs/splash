@@ -162,6 +162,7 @@ void SceneParticles::updateParticles(float animationTime)
     const auto sinT = std::sin(animationTime * speed * t);
 
     particles[i].position = { t * cosT, t * sinT, t };
+    particles[i].velocity = { 0.f, 0.f, 0.f }; // TODO
     particles[i].color = { 0.f, 0.f, t };
   }
 

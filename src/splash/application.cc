@@ -96,6 +96,18 @@ Application::~Application()
   glfwTerminate();
 }
 
+std::unique_ptr<scene::Scene> Application::selectScene(int index)
+{
+  switch (index)
+  {
+  case 0: return std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+  case 1: return std::make_unique<scene::SceneFluid>(resources_.get(), shaders_.get());
+  case 2: return nullptr;
+  }
+
+  return nullptr;
+}
+
 void Application::run()
 {
   // Shaders
@@ -110,8 +122,7 @@ void Application::run()
     "Fluid",
     "(empty)",
   };
-  std::unique_ptr<scene::Scene> scene;
-  scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+  std::unique_ptr<scene::Scene> scene = selectScene(1);
 
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
   while (!glfwWindowShouldClose(window_))
@@ -128,7 +139,7 @@ void Application::run()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    static int sceneIndex = 0;
+    static int sceneIndex = 1;
     if (ImGui::Begin("Control"))
     {
       const auto currentSceneName = scenes[sceneIndex];
@@ -148,18 +159,7 @@ void Application::run()
         if (selected != -1 && sceneIndex != selected)
         {
           sceneIndex = selected;
-          switch (sceneIndex)
-          {
-          case 0:
-            scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
-            break;
-          case 1:
-            scene = std::make_unique<scene::SceneFluid>(resources_.get(), shaders_.get());
-            break;
-          case 2:
-            scene = nullptr;
-            break;
-          }
+          scene = selectScene(sceneIndex);
         }
 
         ImGui::EndCombo();

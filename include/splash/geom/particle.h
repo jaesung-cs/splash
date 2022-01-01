@@ -10,10 +10,13 @@ namespace geom
 struct Particle
 {
   alignas(16) glm::vec3 position;
-  float pad0;
+  float mass;
+
+  alignas(16) glm::vec3 velocity;
+  float pad1;
 
   alignas(16) glm::vec3 color;
-  float pad1;
+  float pad2;
 };
 }
 }

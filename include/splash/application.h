@@ -27,6 +27,7 @@ class Particles;
 
 namespace scene
 {
+class Scene;
 class Resources;
 }
 
@@ -44,6 +45,8 @@ public:
   void run();
 
 private:
+  std::unique_ptr<scene::Scene> selectScene(int index);
+
   void handleEvents();
   void updateLights();
 
