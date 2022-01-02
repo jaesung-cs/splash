@@ -18,7 +18,7 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
   glGenBuffers(1, &instanceBuffer_);
 
   // Create sphere buffer and index
-  constexpr uint32_t segments = 16;
+  constexpr uint32_t segments = 8;
   constexpr float pi = 3.1415926535897932384626433832795f;
   std::vector<float> buffer;
   std::vector<uint32_t> index;
@@ -32,7 +32,7 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
     for (int j = 0; j <= segments; j++)
     {
       const auto v = static_cast<float>(j) / segments;
-      const auto phi = (v - 0.5f) * pi;
+      const auto phi = -(v - 0.5f) * pi;
       const auto cosPhi = std::cos(phi);
       const auto sinPhi = std::sin(phi);
 
@@ -83,10 +83,10 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
   // Allocate instance buffer data
   glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer_);
   glBufferData(GL_ARRAY_BUFFER, n * sizeof(geom::Particle), NULL, GL_DYNAMIC_DRAW);
-  glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, 8 * sizeof(float), 0);
+  glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 12 * sizeof(float), 0);
   glVertexAttribDivisor(1, 1);
   glEnableVertexAttribArray(1);
-  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(4 * sizeof(float)));
+  glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 12 * sizeof(float), (void*)(8 * sizeof(float)));
   glVertexAttribDivisor(2, 1);
   glEnableVertexAttribArray(2);
 

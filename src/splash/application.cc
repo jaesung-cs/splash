@@ -24,8 +24,9 @@
 #include <splash/gl/geometry.h>
 #include <splash/gl/particles_geometry.h>
 #include <splash/scene/resources.h>
-#include <splash/scene/scene_animation.h>
 #include <splash/scene/scene_particles.h>
+#include <splash/scene/scene_fluid.h>
+#include <splash/scene/scene_animation.h>
 
 namespace splash
 {
@@ -67,6 +68,8 @@ Application::Application()
   // Initialize OpenGL configurations
   glEnable(GL_MULTISAMPLE);
   glEnable(GL_DEPTH_TEST);
+  glEnable(GL_CULL_FACE);
+  glCullFace(GL_BACK);
 
   // Setup Dear ImGui context
   IMGUI_CHECKVERSION();
@@ -95,6 +98,18 @@ Application::~Application()
   glfwTerminate();
 }
 
+std::unique_ptr<scene::Scene> Application::selectScene(int index)
+{
+  switch (index)
+  {
+  case 0: return std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+  case 1: return std::make_unique<scene::SceneFluid>(resources_.get(), shaders_.get());
+  case 2: return nullptr;
+  }
+
+  return nullptr;
+}
+
 void Application::run()
 {
   // Shaders
@@ -106,10 +121,10 @@ void Application::run()
   // Initialize scenes
   std::vector<std::string> scenes{
     "Particles",
-    "Animation",
+    "Fluid",
+    "(empty)",
   };
-  std::unique_ptr<scene::Scene> scene;
-  scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+  std::unique_ptr<scene::Scene> scene = selectScene(1);
 
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
   while (!glfwWindowShouldClose(window_))
@@ -126,7 +141,7 @@ void Application::run()
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    static int sceneIndex = 0;
+    static int sceneIndex = 1;
     if (ImGui::Begin("Control"))
     {
       const auto currentSceneName = scenes[sceneIndex];
@@ -146,15 +161,7 @@ void Application::run()
         if (selected != -1 && sceneIndex != selected)
         {
           sceneIndex = selected;
-          switch (sceneIndex)
-          {
-          case 0:
-            scene = std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
-            break;
-          case 1:
-            scene = nullptr;
-            break;
-          }
+          scene = selectScene(sceneIndex);
         }
 
         ImGui::EndCombo();

@@ -16,6 +16,9 @@ public:
   Particles(uint32_t n = 0);
   ~Particles();
 
+  const auto& radius() const noexcept { return radius_; }
+  auto& radius() noexcept { return radius_; }
+
   const auto size() const noexcept { return static_cast<uint32_t>(particles_.size()); }
   const auto& data() const noexcept { return particles_; }
   auto& data() noexcept { return particles_; }
@@ -27,6 +30,7 @@ public:
 
 private:
   std::vector<Particle> particles_;
+  float radius_ = 1.f;
 };
 }
 }
