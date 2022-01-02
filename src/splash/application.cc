@@ -102,9 +102,9 @@ std::unique_ptr<scene::Scene> Application::selectScene(int index)
 {
   switch (index)
   {
-  case 0: return std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
+  case 0: return std::make_unique<scene::SceneAnimation>(resources_.get(), shaders_.get());
   case 1: return std::make_unique<scene::SceneFluid>(resources_.get(), shaders_.get());
-  case 2: return nullptr;
+  case 2: return std::make_unique<scene::SceneParticles>(resources_.get(), shaders_.get());
   }
 
   return nullptr;
@@ -120,9 +120,9 @@ void Application::run()
 
   // Initialize scenes
   std::vector<std::string> scenes{
-    "Particles",
+    "Animation",
     "Fluid",
-    "(empty)",
+    "Particles",
   };
   std::unique_ptr<scene::Scene> scene = selectScene(1);
 
