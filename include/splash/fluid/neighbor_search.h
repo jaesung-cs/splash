@@ -20,9 +20,11 @@ public:
   NeighborSearch();
   virtual ~NeighborSearch();
 
-  virtual std::vector<Neighbor> computeNeighbors(const geom::Particles& particles) = 0;
+  virtual void computeNeighbors(const geom::Particles& particles, float h) = 0;
+  const std::vector<Neighbor>& neighbors() const noexcept { return neighbors_; }
 
-private:
+protected:
+  std::vector<Neighbor> neighbors_;
 };
 }
 }

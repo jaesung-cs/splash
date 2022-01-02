@@ -32,7 +32,7 @@ ParticlesGeometry::ParticlesGeometry(uint32_t n)
     for (int j = 0; j <= segments; j++)
     {
       const auto v = static_cast<float>(j) / segments;
-      const auto phi = (v - 0.5f) * pi;
+      const auto phi = -(v - 0.5f) * pi;
       const auto cosPhi = std::cos(phi);
       const auto sinPhi = std::sin(phi);
 

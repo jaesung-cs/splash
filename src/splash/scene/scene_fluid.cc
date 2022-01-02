@@ -14,11 +14,43 @@
 #include <splash/geom/particles.h>
 #include <splash/model/camera.h>
 #include <splash/scene/resources.h>
+#include <splash/fluid/neighbor_search_spatial_hashing.h>
 
 namespace splash
 {
 namespace scene
 {
+namespace
+{
+constexpr float pi = 3.1415926535897932384626433832795f;
+
+float Poly6(const glm::vec3& r, float h)
+{
+  const auto h2 = h * h;
+  const auto r2 = glm::dot(r, r);
+  if (r2 > h2)
+    return 0.f;
+
+  const auto h3 = h2 * h;
+  const auto f = (h2 - r2) / h3;
+  const auto f3 = f * f * f;
+  return 315.f / 64.f / pi * f3;
+}
+
+glm::vec3 gradPoly6(const glm::vec3& r, float h)
+{
+  const auto h2 = h * h;
+  const auto r2 = glm::dot(r, r);
+  if (r2 > h2)
+    return glm::vec3(0.f);
+
+  const auto h4 = h2 * h2;
+  const auto f = (h2 - r2) / h4;
+  const auto f2 = f * f;
+  return -945.f / 32.f / pi * f2 * (r / h);
+}
+}
+
 SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
   : Scene()
   , resources_(resources)
@@ -28,6 +60,8 @@ SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
   particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
 
   lastTime_ = std::chrono::high_resolution_clock::now();
+
+  neighborSearch_ = std::make_unique<fluid::NeighborSearchSpatialHashing>();
 
   initializeParticles();
 }
@@ -45,8 +79,11 @@ void SceneFluid::drawUi()
 void SceneFluid::draw()
 {
   const auto now = std::chrono::high_resolution_clock::now();
-  const auto dt = std::chrono::duration<float>(now - lastTime_).count();
+  auto dt = std::chrono::duration<float>(now - lastTime_).count();
   lastTime_ = now;
+
+  // Slow motion
+  dt /= 10.f;
 
   if (animation_)
     animationTime_ += dt;
@@ -121,14 +158,16 @@ void SceneFluid::draw()
 void SceneFluid::initializeParticles()
 {
   auto& particles = *particles_;
-  constexpr float radius = 1.f / particleSide_;
+  constexpr float radiusFactor = 1.4f;
+  constexpr float radius = 1.f / particleSide_ / radiusFactor;
 
   particles.radius() = radius;
 
+  rho0_ = 997.f;
+
   constexpr float pi = 3.1415926535897932384626433832795f;
-  constexpr float density = 997.f;
-  const auto volume = 4.f / 3.f * pi * radius * radius * radius;
-  const auto mass = density * volume;
+  const auto volume = 4.f / 3.f * pi * radius * radius * radius; // Spherical particle
+  const auto mass = rho0_ * volume;
 
   constexpr float baseHeight = 1.f;
 
@@ -145,7 +184,7 @@ void SceneFluid::initializeParticles()
         const auto index = i * particleSide_ * particleSide_ + j * particleSide_ + k;
 
         auto& particle = particles[index];
-        particle.position = { u, v, w + baseHeight };
+        particle.position = { u + w * 0.1f, v + w * 0.1f, w + baseHeight };
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
@@ -161,14 +200,109 @@ void SceneFluid::updateParticles(float dt)
 
   if (animation_)
   {
-    constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
+    const auto n = static_cast<uint32_t>(particles.size());
 
-    for (int i = 0; i < particleCount_; i++)
+    constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
+    positions_.resize(n);
+    for (int i = 0; i < n; i++)
     {
+      // Store old particle positions
+      positions_[i] = particles[i].position;
+
+      // Update particles
       particles[i].velocity += gravity * dt;
       particles[i].position += particles[i].velocity * dt;
-      particles[i].position.z = std::max(particles[i].position.z, 0.f);
+
+      // Plane constraints
+      if (particles[i].position.z < 0.f)
+        particles[i].position.z = -0.75f * particles[i].position.z;
     }
+
+    // Neighbor search
+    const auto h = 4.f * radius; // SPH support radius
+    neighborSearch_->computeNeighbors(particles, h);
+    const auto& neighbors = neighborSearch_->neighbors();
+
+    // TODO: Move fluid simulation to a class
+    // Density calculation
+    density_.resize(n);
+    for (int i = 0; i < n; i++)
+      density_[i] = particles[i].mass * Poly6(glm::vec3(0.f), h);
+
+    for (const auto& neighbor : neighbors)
+    {
+      const auto i0 = neighbor.i0;
+      const auto i1 = neighbor.i1;
+
+      const auto& p0 = particles[i0].position;
+      const auto& p1 = particles[i1].position;
+
+      // The opposite direction is already in neighbor list
+      density_[i0] += particles[i1].mass * Poly6(p0 - p1, h);
+    }
+
+    // Compute density constraints
+    incompressibility_.resize(n);
+    for (int i = 0; i < n; i++)
+      incompressibility_[i] = std::max(density_[i] / rho0_ - 1.f, 0.f);
+
+    // Project to make incompressibility = 0
+    incompressibilitySelfGrad_.resize(n);
+    incompressibilityDenoms_.resize(n);
+    for (int i = 0; i < n; i++)
+    {
+      incompressibilitySelfGrad_[i] = glm::vec3(0.f);
+      incompressibilityDenoms_[i] = 0.f;
+    }
+
+    for (const auto& neighbor : neighbors)
+    {
+      // D_pk Ci
+      const auto i0 = neighbor.i0;
+      const auto i1 = neighbor.i1;
+
+      const auto& p0 = particles[i0].position;
+      const auto& p1 = particles[i1].position;
+
+      const auto grad0 = 1.f / rho0_ * particles[i1].mass * gradPoly6(p0 - p1, h);
+      const auto grad1 = -1.f / rho0_ * particles[i1].mass * gradPoly6(p0 - p1, h);
+
+      // Add to denominator
+      incompressibilitySelfGrad_[i0] += grad0;
+      incompressibilityDenoms_[i0] += glm::dot(grad1, grad1);
+    }
+
+    // Compte lambdas
+    incompressibilityLambdas_.resize(n);
+    for (int i = 0; i < n; i++)
+    {
+      const auto denom = incompressibilityDenoms_[i] + glm::dot(incompressibilitySelfGrad_[i], incompressibilitySelfGrad_[i]);
+      incompressibilityLambdas_[i] = -incompressibility_[i] / denom;
+    }
+
+    // Compte delta p
+    deltaP_.resize(n);
+    for (int i = 0; i < n; i++)
+      deltaP_[i] = glm::vec3(0.f);
+
+    for (const auto& neighbor : neighbors)
+    {
+      const auto i0 = neighbor.i0;
+      const auto i1 = neighbor.i1;
+
+      const auto& p0 = particles[i0].position;
+      const auto& p1 = particles[i1].position;
+
+      deltaP_[i0] += 1.f / rho0_ * (incompressibilityLambdas_[i0] + incompressibilityLambdas_[i1]) * particles[i1].mass * gradPoly6(p0 - p1, h);
+    }
+
+    // Update positions
+    for (int i = 0; i < n; i++)
+      particles[i].position += deltaP_[i];
+
+    // Update new velocities based on positions
+    for (int i = 0; i < n; i++)
+      particles[i].velocity = (particles[i].position - positions_[i]) / dt;
   }
 
   particlesGeometry_->update(*particles_);

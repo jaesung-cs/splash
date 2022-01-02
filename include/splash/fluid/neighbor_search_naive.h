@@ -13,7 +13,7 @@ public:
   NeighborSearchNaive();
   ~NeighborSearchNaive() override;
 
-  std::vector<Neighbor> computeNeighbors(const geom::Particles& particles);
+  void computeNeighbors(const geom::Particles& particles, float h) override;
 
 private:
 };

@@ -13,10 +13,10 @@ struct Particle
   float mass;
 
   alignas(16) glm::vec3 velocity;
-  float pad1;
+  float pad0;
 
   alignas(16) glm::vec3 color;
-  float pad2;
+  float pad1;
 };
 }
 }

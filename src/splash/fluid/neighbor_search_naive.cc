@@ -15,7 +15,7 @@ NeighborSearchNaive::~NeighborSearchNaive()
 {
 }
 
-std::vector<Neighbor> NeighborSearchNaive::computeNeighbors(const geom::Particles& particles)
+void NeighborSearchNaive::computeNeighbors(const geom::Particles& particles, float h)
 {
   const auto n = particles.size();
 
@@ -25,8 +25,6 @@ std::vector<Neighbor> NeighborSearchNaive::computeNeighbors(const geom::Particle
     {
     }
   }
-
-  return {};
 }
 }
 }

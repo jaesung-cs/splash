@@ -7,6 +7,8 @@ namespace fluid
 {
 struct Neighbor
 {
+  int i0;
+  int i1;
 };
 }
 }
