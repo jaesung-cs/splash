@@ -1,21 +1,17 @@
 #include <splash/scene/scene_particles.h>
 
-#include <glad/glad.h>
-
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
-#include <splash/model/camera.h>
-#include <splash/model/box.h>
 #include <splash/scene/resources.h>
-#include <splash/geom/particles.h>
-#include <splash/gl/shader.h>
 #include <splash/gl/shaders.h>
+#include <splash/gl/shader.h>
 #include <splash/gl/texture.h>
 #include <splash/gl/geometry.h>
 #include <splash/gl/particles_geometry.h>
-#include <splash/gl/boxes_geometry.h>
+#include <splash/geom/particles.h>
+#include <splash/model/camera.h>
 
 namespace splash
 {
@@ -26,27 +22,58 @@ SceneParticles::SceneParticles(Resources* resources, gl::Shaders* shaders)
   , resources_(resources)
   , shaders_(shaders)
 {
-  // Particles
-  particles_ = std::make_unique<geom::Particles>(particleCount_);
-  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
-
-  // Boxes
-  boxesGeometry_ = std::make_unique<gl::BoxesGeometry>(particleCount_);
-
-  // Animation
-  lastTime_ = std::chrono::high_resolution_clock::now();
+  initializeParticles();
 }
 
 SceneParticles::~SceneParticles() = default;
 
-std::string SceneParticles::name() const
+void SceneParticles::initializeParticles()
 {
-  return "Particles";
+  const auto particleCount = particleCountX_ * particleCountY_;
+
+  particles_ = std::make_unique<geom::Particles>(particleCount);
+  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount);
+
+  constexpr float baseHeight = 1.f;
+  constexpr float radius = 0.005f; // 0.5cm
+  constexpr float density = 0.175;
+  constexpr float mass = 8.f * radius * radius * radius; // Cubic particle
+
+  particles_->radius() = radius;
+  for (int i = 0; i < particleCountX_; i++)
+  {
+    const auto u = static_cast<float>(i) / particleCountX_;
+    for (int j = 0; j < particleCountY_; j++)
+    {
+      const auto v = static_cast<float>(j) / particleCountY_;
+
+      const auto index = i * particleCountY_ + j;
+      auto& particle = (*particles_)[index];
+      particle.position = { i * radius * 2.f, 0, baseHeight - j * radius * 2.f};
+      particle.velocity = { 0.f, 0.f, 0.f };
+      particle.mass = mass;
+      particle.color = { 0.5f, 0.5f, v };
+    }
+  }
+
+  particlesGeometry_->update(*particles_);
 }
 
 void SceneParticles::drawUi()
 {
-  ImGui::Checkbox("Draw boxes", &drawBoxes_);
+  int slider[2] = {
+    particleCountX_,
+    particleCountY_,
+  };
+  if (ImGui::SliderInt2("Particle Count", slider, 16, 64))
+  {
+    particleCountX_ = slider[0];
+    particleCountY_ = slider[1];
+  }
+
+  if (ImGui::Button("Initialize"))
+    initializeParticles();
+
   ImGui::Checkbox("Animation", &animation_);
 }
 
@@ -57,9 +84,7 @@ void SceneParticles::draw()
   lastTime_ = now;
 
   if (animation_)
-    animationTime_ += dt;
-
-  updateParticles(animationTime_);
+    updateParticles(dt);
 
   auto& camera = resources_->camera();
 
@@ -87,7 +112,7 @@ void SceneParticles::draw()
     floorShader.done();
   }
 
-  // Draw particles
+  // Particles
   {
     auto& particlesShader = (*shaders_)["particles"];
     particlesShader.use();
@@ -124,69 +149,24 @@ void SceneParticles::draw()
 
     particlesShader.done();
   }
-
-  // Draw boxes
-  if (drawBoxes_)
-  {
-    auto& boxesShader = (*shaders_)["boxes"];
-    boxesShader.use();
-
-    glm::mat4 model = glm::mat4(1.f);
-    glm::mat4 modelInverseTranspose = glm::transpose(glm::inverse(model));
-    glm::mat4 view = camera.view();
-    glm::mat4 projection = camera.projection();
-
-    boxesShader.uniformMatrix4f("model", model);
-    boxesShader.uniformMatrix4f("modelInverseTranspose", modelInverseTranspose);
-    boxesShader.uniformMatrix4f("view", view);
-    boxesShader.uniformMatrix4f("projection", projection);
-
-    boxesGeometry_->draw();
-
-    boxesShader.done();
-  }
 }
 
-void SceneParticles::updateParticles(float animationTime)
+void SceneParticles::updateParticles(float dt)
 {
   auto& particles = *particles_;
 
-  particles.radius() = 0.05f;
-  for (int i = 0; i < particleCount_; i++)
+  const auto n = particles.size();
+
+  constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
+  prevPositions_.resize(n);
+  for (int i = 0; i < n; i++)
   {
-    const auto t = static_cast<float>(i) / (particleCount_ - 1);
-    const auto x = static_cast<float>(i);
-
-    constexpr float speed = 10.f;
-    const auto cosT = std::cos(animationTime * speed * t);
-    const auto sinT = std::sin(animationTime * speed * t);
-
-    particles[i].position = { t * cosT, t * sinT, t };
-    particles[i].velocity = { 0.f, 0.f, 0.f }; // TODO
-    particles[i].color = { 0.f, 0.f, t };
+    prevPositions_[i] = particles[i].position;
+    particles[i].velocity += dt * gravity;
+    particles[i].position += dt * particles[i].velocity;
   }
 
   particlesGeometry_->update(particles);
-
-  // Update boxes
-  if (drawBoxes_)
-  {
-    const auto r = particles.radius();
-
-    std::vector<model::Box> boxes;
-    for (int i = 0; i < particleCount_; i++)
-    {
-      const auto& p = particles[i].position;
-
-      model::Box box;
-      box.min = p - glm::vec3(r);
-      box.max = p + glm::vec3(r);
-      boxes.push_back(box);
-    }
-
-    glm::vec3 boxColor(0.25f, 0.25f, 1.f);
-    boxesGeometry_->update(boxes, boxColor);
-  }
 }
 }
 }

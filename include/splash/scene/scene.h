@@ -14,8 +14,6 @@ public:
   Scene();
   virtual ~Scene();
 
-  virtual std::string name() const;
-
   virtual void drawUi();
   virtual void draw();
 
