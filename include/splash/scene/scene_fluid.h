@@ -48,14 +48,21 @@ private:
   void initializeParticles();
   void updateParticles(float dt);
 
-  static constexpr uint32_t particleSide_ = 8;
-  static constexpr uint32_t particleCount_ = particleSide_ * particleSide_ * particleSide_;
+  static constexpr uint32_t fluidSide_ = 16;
+  static constexpr uint32_t fluidCount_ = fluidSide_ * fluidSide_ * fluidSide_;
+  static constexpr uint32_t boundarySide_ = 24;
+  static constexpr uint32_t boundaryCount_ = boundarySide_ * boundarySide_ * 6; // 6 sides
+  static constexpr uint32_t particleCount_ = fluidCount_ + boundaryCount_;
   std::unique_ptr<geom::Particles> particles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
 
   // Fluid simulation
   std::vector<glm::vec3> positions_;
   std::unique_ptr<fluid::NeighborSearch> neighborSearch_;
+  std::vector<std::vector<int>> neighborIndices_;
+  std::vector<int> fluidIndices_;
+  std::vector<int> boundaryIndices_;
+  std::vector<int> toFluidIndex_;
   std::vector<float> density_;
   float rho0_ = 0.f; // Rest density
 

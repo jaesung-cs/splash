@@ -159,7 +159,7 @@ void SceneFluid::initializeParticles()
 {
   auto& particles = *particles_;
   constexpr float radiusFactor = 1.4f;
-  constexpr float radius = 1.f / particleSide_ / radiusFactor;
+  constexpr float radius = 1.f / fluidSide_;
 
   particles.radius() = radius;
 
@@ -169,26 +169,59 @@ void SceneFluid::initializeParticles()
   const auto volume = 4.f / 3.f * pi * radius * radius * radius; // Spherical particle
   const auto mass = rho0_ * volume;
 
-  constexpr float baseHeight = 1.f;
+  constexpr float baseHeight = 0.25f;
 
-  for (int i = 0; i < particleSide_; i++)
+  for (int i = 0; i < fluidSide_; i++)
   {
-    const auto u = static_cast<float>(i) / (particleSide_ - 1);
-    for (int j = 0; j < particleSide_; j++)
+    for (int j = 0; j < fluidSide_; j++)
     {
-      const auto v = static_cast<float>(j) / (particleSide_ - 1);
-      for (int k = 0; k < particleSide_; k++)
+      for (int k = 0; k < fluidSide_; k++)
       {
-        const auto w = static_cast<float>(k) / (particleSide_ - 1);
-
-        const auto index = i * particleSide_ * particleSide_ + j * particleSide_ + k;
+        const auto index = i * fluidSide_ * fluidSide_ + j * fluidSide_ + k;
 
         auto& particle = particles[index];
-        particle.position = { u + w * 0.1f, v + w * 0.1f, w + baseHeight };
+        particle.type = geom::ParticleType::FLUID;
+        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k) * 2.f * radius + glm::vec3(0.f, 0.f, baseHeight);
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
       }
+    }
+  }
+
+  // Boundary generation
+  geom::Particle boundaryParticle;
+  boundaryParticle.type = geom::ParticleType::BOUNDARY;
+  boundaryParticle.mass = 0.f;
+  boundaryParticle.color = glm::vec3(101.f, 67.f, 33.f) / 255.f;
+  boundaryParticle.velocity = { 0.f, 0.f, 0.f };
+
+  constexpr glm::vec3 baseOffset(-0.5f, -0.5f, radius);
+  const auto boundaryLength = boundarySide_ * 2.f * radius;
+  int index = fluidCount_;
+  for (int i = 0; i < boundarySide_; i++)
+  {
+    for (int j = 0; j < boundarySide_; j++)
+    {
+      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 2.f * radius;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z + boundaryLength);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.z, b.y);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.z + boundaryLength, b.y);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.z, b.x, b.y);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = baseOffset + glm::vec3(b.z + boundaryLength, b.x, b.y);
+      particles[index++] = boundaryParticle;
     }
   }
 }
@@ -200,7 +233,7 @@ void SceneFluid::updateParticles(float dt)
 
   if (animation_)
   {
-    const auto n = static_cast<uint32_t>(particles.size());
+    const auto n = particles.size();
 
     constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
     positions_.resize(n);
@@ -210,99 +243,162 @@ void SceneFluid::updateParticles(float dt)
       positions_[i] = particles[i].position;
 
       // Update particles
-      particles[i].velocity += gravity * dt;
-      particles[i].position += particles[i].velocity * dt;
+      if (particles[i].type == geom::ParticleType::FLUID)
+      {
+        particles[i].velocity += gravity * dt;
+        particles[i].position += particles[i].velocity * dt;
 
-      // Plane constraints
-      if (particles[i].position.z < 0.f)
-        particles[i].position.z = -0.75f * particles[i].position.z;
+        // Plane constraints
+        if (particles[i].position.z < 0.f)
+          particles[i].position.z = -0.75f * particles[i].position.z;
+      }
     }
 
     // Neighbor search
     const auto h = 4.f * radius; // SPH support radius
-    neighborSearch_->computeNeighbors(particles, h);
-    const auto& neighbors = neighborSearch_->neighbors();
+    {
+      neighborSearch_->computeNeighbors(particles, h);
+      const auto& neighbors = neighborSearch_->neighbors();
+
+      neighborIndices_.resize(n);
+      for (int i = 0; i < n; i++)
+        neighborIndices_[i].clear();
+
+      for (auto neighbor : neighbors)
+      {
+        const auto i0 = neighbor.i0;
+        const auto i1 = neighbor.i1;
+
+        neighborIndices_[i0].push_back(i1);
+      }
+    }
 
     // TODO: Move fluid simulation to a class
-    // Density calculation
-    density_.resize(n);
+    // Split fluid and boundary
+    fluidIndices_.clear();
+    boundaryIndices_.clear();
+    toFluidIndex_.resize(n);
     for (int i = 0; i < n; i++)
-      density_[i] = particles[i].mass * Poly6(glm::vec3(0.f), h);
-
-    for (const auto& neighbor : neighbors)
     {
-      const auto i0 = neighbor.i0;
-      const auto i1 = neighbor.i1;
+      if (particles[i].type == geom::ParticleType::FLUID)
+      {
+        toFluidIndex_[i] = fluidIndices_.size();
+        fluidIndices_.push_back(i);
+      }
+      else
+      {
+        toFluidIndex_[i] = -1;
+        boundaryIndices_.push_back(i);
+      }
+    }
 
-      const auto& p0 = particles[i0].position;
-      const auto& p1 = particles[i1].position;
+    // Density calculation
+    const auto n0 = fluidIndices_.size();
+    const auto n1 = boundaryIndices_.size();
 
-      // The opposite direction is already in neighbor list
-      density_[i0] += particles[i1].mass * Poly6(p0 - p1, h);
+    density_.resize(n0);
+    for (int i = 0; i < n0; i++)
+    {
+      const auto i0 = fluidIndices_[i];
+
+      // Contribution from self
+      density_[i] = particles[i0].mass * Poly6(glm::vec3(0.f), h);
+
+      // Contribution from neighbors
+      for (auto i1 : neighborIndices_[i0])
+      {
+        const auto& p0 = particles[i0].position;
+        const auto& p1 = particles[i1].position;
+
+        if (particles[i1].type == geom::ParticleType::FLUID)
+          density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
+
+        else if (particles[i1].type == geom::ParticleType::BOUNDARY)
+        {
+          // TODO: Boundary psi
+        }
+      }
     }
 
     // Compute density constraints
-    incompressibility_.resize(n);
-    for (int i = 0; i < n; i++)
+    incompressibility_.resize(n0);
+    for (int i = 0; i < n0; i++)
       incompressibility_[i] = std::max(density_[i] / rho0_ - 1.f, 0.f);
 
     // Project to make incompressibility = 0
-    incompressibilitySelfGrad_.resize(n);
-    incompressibilityDenoms_.resize(n);
-    for (int i = 0; i < n; i++)
+    incompressibilitySelfGrad_.resize(n0);
+    incompressibilityDenoms_.resize(n0);
+    for (int i = 0; i < n0; i++)
     {
       incompressibilitySelfGrad_[i] = glm::vec3(0.f);
       incompressibilityDenoms_[i] = 0.f;
     }
 
-    for (const auto& neighbor : neighbors)
+    for (int i = 0; i < n0; i++)
     {
-      // D_pk Ci
-      const auto i0 = neighbor.i0;
-      const auto i1 = neighbor.i1;
+      const auto i0 = fluidIndices_[i];
 
-      const auto& p0 = particles[i0].position;
-      const auto& p1 = particles[i1].position;
+      for (auto i1 : neighborIndices_[i0])
+      {
+        const auto& p0 = particles[i0].position;
+        const auto& p1 = particles[i1].position;
 
-      const auto grad0 = 1.f / rho0_ * particles[i1].mass * gradPoly6(p0 - p1, h);
-      const auto grad1 = -1.f / rho0_ * particles[i1].mass * gradPoly6(p0 - p1, h);
+        const auto m1 = particles[i1].mass;
 
-      // Add to denominator
-      incompressibilitySelfGrad_[i0] += grad0;
-      incompressibilityDenoms_[i0] += glm::dot(grad1, grad1);
+        glm::vec3 grad0(0.f);
+        glm::vec3 grad1(0.f);
+
+        if (particles[i1].type == geom::ParticleType::FLUID)
+        {
+          grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+          grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+        }
+
+        // Add to denominator
+        incompressibilitySelfGrad_[i] += grad0;
+        incompressibilityDenoms_[i] += glm::dot(grad1, grad1);
+      }
     }
 
     // Compte lambdas
-    incompressibilityLambdas_.resize(n);
-    for (int i = 0; i < n; i++)
+    incompressibilityLambdas_.resize(n0);
+    for (int i = 0; i < n0; i++)
     {
       const auto denom = incompressibilityDenoms_[i] + glm::dot(incompressibilitySelfGrad_[i], incompressibilitySelfGrad_[i]);
       incompressibilityLambdas_[i] = -incompressibility_[i] / denom;
     }
 
     // Compte delta p
-    deltaP_.resize(n);
-    for (int i = 0; i < n; i++)
+    deltaP_.resize(n0);
+    for (int i = 0; i < n0; i++)
       deltaP_[i] = glm::vec3(0.f);
 
-    for (const auto& neighbor : neighbors)
+    for (int i = 0; i < n0; i++)
     {
-      const auto i0 = neighbor.i0;
-      const auto i1 = neighbor.i1;
+      const auto i0 = fluidIndices_[i];
 
-      const auto& p0 = particles[i0].position;
-      const auto& p1 = particles[i1].position;
+      for (auto i1 : neighborIndices_[i0])
+      {
+        if (particles[i1].type == geom::ParticleType::FLUID)
+        {
+          const auto& p0 = particles[i0].position;
+          const auto& p1 = particles[i1].position;
 
-      deltaP_[i0] += 1.f / rho0_ * (incompressibilityLambdas_[i0] + incompressibilityLambdas_[i1]) * particles[i1].mass * gradPoly6(p0 - p1, h);
+          const auto m1 = particles[i1].mass;
+
+          deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradPoly6(p0 - p1, h);
+        }
+      }
     }
 
-    // Update positions
-    for (int i = 0; i < n; i++)
-      particles[i].position += deltaP_[i];
+    // Update positions and velocity
+    for (int i = 0; i < n0; i++)
+    {
+      const auto i0 = fluidIndices_[i];
 
-    // Update new velocities based on positions
-    for (int i = 0; i < n; i++)
-      particles[i].velocity = (particles[i].position - positions_[i]) / dt;
+      particles[i0].position += deltaP_[i];
+      particles[i0].velocity = (particles[i0].position - positions_[i0]) / dt;
+    }
   }
 
   particlesGeometry_->update(*particles_);

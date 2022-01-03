@@ -7,13 +7,19 @@ namespace splash
 {
 namespace geom
 {
+enum class ParticleType : uint32_t
+{
+  FLUID,
+  BOUNDARY,
+};
+
 struct Particle
 {
   alignas(16) glm::vec3 position;
-  float mass;
+  ParticleType type;
 
   alignas(16) glm::vec3 velocity;
-  float pad0;
+  float mass;
 
   alignas(16) glm::vec3 color;
   float pad1;
