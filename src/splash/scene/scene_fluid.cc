@@ -159,7 +159,7 @@ void SceneFluid::initializeParticles()
 {
   auto& particles = *particles_;
   constexpr float radiusFactor = 1.4f;
-  constexpr float radius = 1.f / fluidSide_;
+  constexpr float radius = 1.f / fluidSideX_;
 
   particles.radius() = radius;
 
@@ -169,19 +169,19 @@ void SceneFluid::initializeParticles()
   const auto volume = 4.f / 3.f * pi * radius * radius * radius; // Spherical particle
   const auto mass = rho0_ * volume;
 
-  constexpr float baseHeight = 0.25f;
+  constexpr float baseHeight = 0.2f;
 
-  for (int i = 0; i < fluidSide_; i++)
+  for (int i = 0; i < fluidSideX_; i++)
   {
-    for (int j = 0; j < fluidSide_; j++)
+    for (int j = 0; j < fluidSideY_; j++)
     {
-      for (int k = 0; k < fluidSide_; k++)
+      for (int k = 0; k < fluidSideZ_; k++)
       {
-        const auto index = i * fluidSide_ * fluidSide_ + j * fluidSide_ + k;
+        const auto index = i * fluidSideY_ * fluidSideZ_ + j * fluidSideZ_ + k;
 
         auto& particle = particles[index];
         particle.type = geom::ParticleType::FLUID;
-        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k) * 2.f * radius + glm::vec3(0.f, 0.f, baseHeight);
+        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k * 0.8f) * 2.f * radius + glm::vec3(0.f, 0.f, baseHeight);
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
@@ -196,14 +196,14 @@ void SceneFluid::initializeParticles()
   boundaryParticle.color = glm::vec3(101.f, 67.f, 33.f) / 255.f;
   boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
-  constexpr glm::vec3 baseOffset(-0.5f, -0.5f, radius);
-  const auto boundaryLength = boundarySide_ * 2.f * radius;
+  constexpr glm::vec3 baseOffset(-0.2f, -0.2f, radius);
+  const auto boundaryLength = boundarySide_ * 1.5f * radius;
   int index = fluidCount_;
   for (int i = 0; i < boundarySide_; i++)
   {
     for (int j = 0; j < boundarySide_; j++)
     {
-      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 2.f * radius;
+      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 1.5f * radius;
 
       boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z);
       particles[index++] = boundaryParticle;
@@ -247,10 +247,6 @@ void SceneFluid::updateParticles(float dt)
       {
         particles[i].velocity += gravity * dt;
         particles[i].position += particles[i].velocity * dt;
-
-        // Plane constraints
-        if (particles[i].position.z < 0.f)
-          particles[i].position.z = -0.75f * particles[i].position.z;
       }
     }
 
@@ -292,9 +288,34 @@ void SceneFluid::updateParticles(float dt)
       }
     }
 
-    // Density calculation
     const auto n0 = fluidIndices_.size();
     const auto n1 = boundaryIndices_.size();
+
+    // Compute boundary psi
+    for (int i = 0; i < n1; i++)
+    {
+      const auto i0 = boundaryIndices_[i];
+
+      float delta = Poly6(glm::vec3(0.f), h);
+
+      for (auto i1 : neighborIndices_[i0])
+      {
+        if (particles[i1].type == geom::ParticleType::BOUNDARY)
+        {
+          const auto& p0 = particles[i0].position;
+          const auto& p1 = particles[i1].position;
+
+          delta += Poly6(p0 - p1, h);
+        }
+      }
+
+      const auto volume = 1.f / delta;
+
+      // Update boundary particle mass
+      particles[i0].mass = rho0_ * volume;
+    }
+
+    // Density calculation
 
     density_.resize(n0);
     for (int i = 0; i < n0; i++)
@@ -310,13 +331,7 @@ void SceneFluid::updateParticles(float dt)
         const auto& p0 = particles[i0].position;
         const auto& p1 = particles[i1].position;
 
-        if (particles[i1].type == geom::ParticleType::FLUID)
-          density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
-
-        else if (particles[i1].type == geom::ParticleType::BOUNDARY)
-        {
-          // TODO: Boundary psi
-        }
+        density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
       }
     }
 
@@ -345,18 +360,15 @@ void SceneFluid::updateParticles(float dt)
 
         const auto m1 = particles[i1].mass;
 
-        glm::vec3 grad0(0.f);
-        glm::vec3 grad1(0.f);
+        const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+        const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
 
-        if (particles[i1].type == geom::ParticleType::FLUID)
-        {
-          grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
-          grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
-        }
-
-        // Add to denominator
+        // Add to gradient by self
         incompressibilitySelfGrad_[i] += grad0;
-        incompressibilityDenoms_[i] += glm::dot(grad1, grad1);
+
+        // Add to denominator for movable fluid particles
+        if (particles[i1].type == geom::ParticleType::FLUID)
+          incompressibilityDenoms_[i] += glm::dot(grad1, grad1);
       }
     }
 
@@ -379,15 +391,15 @@ void SceneFluid::updateParticles(float dt)
 
       for (auto i1 : neighborIndices_[i0])
       {
+        const auto& p0 = particles[i0].position;
+        const auto& p1 = particles[i1].position;
+
+        const auto m1 = particles[i1].mass;
+
         if (particles[i1].type == geom::ParticleType::FLUID)
-        {
-          const auto& p0 = particles[i0].position;
-          const auto& p1 = particles[i1].position;
-
-          const auto m1 = particles[i1].mass;
-
           deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradPoly6(p0 - p1, h);
-        }
+        else
+          deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradPoly6(p0 - p1, h);
       }
     }
 

@@ -48,9 +48,11 @@ private:
   void initializeParticles();
   void updateParticles(float dt);
 
-  static constexpr uint32_t fluidSide_ = 16;
-  static constexpr uint32_t fluidCount_ = fluidSide_ * fluidSide_ * fluidSide_;
-  static constexpr uint32_t boundarySide_ = 24;
+  static constexpr uint32_t fluidSideX_ = 16;
+  static constexpr uint32_t fluidSideY_ = 16;
+  static constexpr uint32_t fluidSideZ_ = 12;
+  static constexpr uint32_t fluidCount_ = fluidSideX_ * fluidSideY_ * fluidSideZ_;
+  static constexpr uint32_t boundarySide_ = 28;
   static constexpr uint32_t boundaryCount_ = boundarySide_ * boundarySide_ * 6; // 6 sides
   static constexpr uint32_t particleCount_ = fluidCount_ + boundaryCount_;
   std::unique_ptr<geom::Particles> particles_;
