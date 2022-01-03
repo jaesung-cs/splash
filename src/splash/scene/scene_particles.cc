@@ -4,8 +4,6 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
-#include <glm/glm.hpp>
-
 #include <splash/scene/resources.h>
 #include <splash/gl/shaders.h>
 #include <splash/gl/shader.h>
@@ -75,10 +73,19 @@ void SceneParticles::drawUi()
 
   if (ImGui::Button("Initialize"))
     initializeParticles();
+
+  ImGui::Checkbox("Animation", &animation_);
 }
 
 void SceneParticles::draw()
 {
+  const auto now = std::chrono::high_resolution_clock::now();
+  const auto dt = std::chrono::duration<float>(now - lastTime_).count();
+  lastTime_ = now;
+
+  if (animation_)
+    updateParticles(dt);
+
   auto& camera = resources_->camera();
 
   // Draw floor
@@ -142,6 +149,24 @@ void SceneParticles::draw()
 
     particlesShader.done();
   }
+}
+
+void SceneParticles::updateParticles(float dt)
+{
+  auto& particles = *particles_;
+
+  const auto n = particles.size();
+
+  constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
+  prevPositions_.resize(n);
+  for (int i = 0; i < n; i++)
+  {
+    prevPositions_[i] = particles[i].position;
+    particles[i].velocity += dt * gravity;
+    particles[i].position += dt * particles[i].velocity;
+  }
+
+  particlesGeometry_->update(particles);
 }
 }
 }
