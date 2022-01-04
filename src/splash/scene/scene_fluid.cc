@@ -166,8 +166,7 @@ void SceneFluid::initializeParticles()
   rho0_ = 997.f;
 
   constexpr float pi = 3.1415926535897932384626433832795f;
-  const auto volume = 4.f / 3.f * pi * radius * radius * radius; // Spherical particle
-  const auto mass = rho0_ * volume;
+  const auto mass = rho0_ * 8.f * radius * radius * radius; // Cubic particle
 
   constexpr float baseHeight = 0.2f;
 
@@ -181,7 +180,7 @@ void SceneFluid::initializeParticles()
 
         auto& particle = particles[index];
         particle.type = geom::ParticleType::FLUID;
-        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k * 0.8f) * 2.f * radius + glm::vec3(0.f, 0.f, baseHeight);
+        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k * 0.8f) * 2.5f * radius + glm::vec3(0.f, 0.f, baseHeight);
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
@@ -197,13 +196,13 @@ void SceneFluid::initializeParticles()
   boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
   constexpr glm::vec3 baseOffset(-0.2f, -0.2f, radius);
-  const auto boundaryLength = boundarySide_ * 1.5f * radius;
+  const auto boundaryLength = boundarySide_ * 2.f * radius;
   int index = fluidCount_;
   for (int i = 0; i < boundarySide_; i++)
   {
     for (int j = 0; j < boundarySide_; j++)
     {
-      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 1.5f * radius;
+      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 2.f * radius;
 
       boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z);
       particles[index++] = boundaryParticle;

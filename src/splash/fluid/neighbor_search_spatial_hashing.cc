@@ -34,7 +34,7 @@ void NeighborSearchSpatialHashing::computeNeighbors(const geom::Particles& parti
 {
   neighbors_.resize(0);
 
-  const auto n = static_cast<uint32_t>(particles.size());
+  const auto n = particles.size();
 
   std::vector<std::vector<uint32_t>> hashTable(hashBucketSize_);
 
