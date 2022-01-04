@@ -101,6 +101,18 @@ void SceneFluid::drawUi()
     initializeParticles();
 
   ImGui::Checkbox("Animation", &animation_);
+
+  ImGui::SliderInt("Slow motion", &timestepScaleLevel_, 0, 4, "");
+
+  float timestepScaleTable[] = {
+    1.f,
+    1.7f,
+    3.f,
+    5.f,
+    10.f,
+  };
+  timestepScale_ = timestepScaleTable[timestepScaleLevel_];
+  ImGui::Text("Animation speed X%.1lf", timestepScale_);
 }
 
 void SceneFluid::draw()
@@ -110,7 +122,7 @@ void SceneFluid::draw()
   lastTime_ = now;
 
   // Slow motion
-  dt /= 10.f;
+  dt /= timestepScale_;
 
   if (animation_)
     animationTime_ += dt;

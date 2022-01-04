@@ -68,6 +68,7 @@ private:
   std::vector<float> density_;
   float rho0_ = 0.f; // Rest density
   float viscosity_ = 0.02f;
+  float timestepScale_ = 1.f;
 
   // Fluid simulation - constraints
   std::vector<float> incompressibilityLambdas_;
@@ -79,6 +80,7 @@ private:
 
   // Rendering options
   bool animation_ = false;
+  int timestepScaleLevel_ = 0; // Relates to timestep scale
 };
 }
 }
