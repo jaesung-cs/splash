@@ -37,17 +37,18 @@ float Poly6(const glm::vec3& r, float h)
   return 315.f / 64.f / pi * f3;
 }
 
-glm::vec3 gradPoly6(const glm::vec3& r, float h)
+glm::vec3 gradSpiky(const glm::vec3& r, float h)
 {
   const auto h2 = h * h;
   const auto r2 = glm::dot(r, r);
   if (r2 > h2)
     return glm::vec3(0.f);
 
-  const auto h4 = h2 * h2;
-  const auto f = (h2 - r2) / h4;
-  const auto f2 = f * f;
-  return -945.f / 32.f / pi * f2 * (r / h);
+  const auto h6 = h2 * h2 * h2;
+  const auto r1 = std::sqrt(r2);
+  if (r1 == 0.f)
+    return -45.f / pi / h6 * h * h * glm::vec3(1.f, 0.f, 0.f);
+  return -45.f / pi / h6 * (h - r1) * (h - r1) * (r / r1);
 }
 }
 
@@ -358,8 +359,8 @@ void SceneFluid::updateParticles(float dt)
 
             const auto m1 = particles[i1].mass;
 
-            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
-            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradSpiky(p0 - p1, h);
+            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradSpiky(p0 - p1, h);
 
             // Add to gradient by self
             selfGrad += grad0;
@@ -394,9 +395,9 @@ void SceneFluid::updateParticles(float dt)
           const auto m1 = particles[i1].mass;
 
           if (particles[i1].type == geom::ParticleType::FLUID)
-            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradPoly6(p0 - p1, h);
+            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradSpiky(p0 - p1, h);
           else
-            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradPoly6(p0 - p1, h);
+            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradSpiky(p0 - p1, h);
         }
       }
 
@@ -413,6 +414,30 @@ void SceneFluid::updateParticles(float dt)
     {
       const auto i0 = fluidIndices_[i];
       particles[i0].velocity = (particles[i0].position - positions_[i0]) / dt;
+    }
+
+    // Solve viscosity
+    for (int i = 0; i < n0; i++)
+    {
+      const auto i0 = fluidIndices_[i];
+
+      for (auto i1 : neighborIndices_[i0])
+      {
+        if (particles[i1].type == geom::ParticleType::FLUID)
+        {
+          const auto& p0 = particles[i0].position;
+          const auto& p1 = particles[i1].position;
+
+          const auto& v0 = particles[i0].velocity;
+          const auto& v1 = particles[i1].velocity;
+
+          const auto m1 = particles[i1].mass;
+
+          const auto density1 = density_[toFluidIndex_[i1]];
+
+          particles[i0].velocity -= viscosity_ * (m1 / density1) * (v0 - v1) * Poly6(p0 - p1, h);
+        }
+      }
     }
   }
 

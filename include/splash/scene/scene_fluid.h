@@ -67,6 +67,7 @@ private:
   std::vector<int> toFluidIndex_;
   std::vector<float> density_;
   float rho0_ = 0.f; // Rest density
+  float viscosity_ = 0.02f;
 
   // Fluid simulation - constraints
   std::vector<float> incompressibilityLambdas_;
