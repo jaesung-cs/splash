@@ -37,6 +37,32 @@ float Poly6(const glm::vec3& r, float h)
   return 315.f / 64.f / pi * f3;
 }
 
+glm::vec3 gradPoly6(const glm::vec3& r, float h)
+{
+  const auto h2 = h * h;
+  const auto r2 = glm::dot(r, r);
+  if (r2 > h2)
+    return glm::vec3(0.f);
+
+  const auto h4 = h2 * h2;
+  const auto f = (h2 - r2) / h4;
+  const auto f2 = f * f;
+  return -945.f / 32.f / pi * f2 * (r / h);
+}
+
+float Spiky(const glm::vec3& r, float h)
+{
+  const auto h2 = h * h;
+  const auto r2 = glm::dot(r, r);
+  if (r2 > h2)
+    return 0.f;
+
+  const auto r1 = std::sqrt(r2);
+  const auto f = (h - r1) / h2;
+  const auto f3 = f * f * f;
+  return 15.f / pi * f3;
+}
+
 glm::vec3 gradSpiky(const glm::vec3& r, float h)
 {
   const auto h2 = h * h;
@@ -47,7 +73,7 @@ glm::vec3 gradSpiky(const glm::vec3& r, float h)
   const auto h6 = h2 * h2 * h2;
   const auto r1 = std::sqrt(r2);
   if (r1 == 0.f)
-    return -45.f / pi / h6 * h * h * glm::vec3(1.f, 0.f, 0.f);
+    return -45.f / pi / h6 * h * h * glm::vec3(1.f, 0.f, 0.f); // Random direction
   return -45.f / pi / h6 * (h - r1) * (h - r1) * (r / r1);
 }
 }
@@ -300,7 +326,7 @@ void SceneFluid::updateParticles(float dt)
     {
       const auto i0 = boundaryIndices_[i];
 
-      float delta = Poly6(glm::vec3(0.f), h);
+      float delta = Spiky(glm::vec3(0.f), h);
 
       for (auto i1 : neighborIndices_[i0])
       {
@@ -309,7 +335,7 @@ void SceneFluid::updateParticles(float dt)
           const auto& p0 = particles[i0].position;
           const auto& p1 = particles[i1].position;
 
-          delta += Poly6(p0 - p1, h);
+          delta += Spiky(p0 - p1, h);
         }
       }
 
@@ -329,7 +355,7 @@ void SceneFluid::updateParticles(float dt)
         const auto i0 = fluidIndices_[i];
 
         // Contribution from self
-        density_[i] = particles[i0].mass * Poly6(glm::vec3(0.f), h);
+        density_[i] = particles[i0].mass * Spiky(glm::vec3(0.f), h);
 
         // Contribution from neighbors
         for (auto i1 : neighborIndices_[i0])
@@ -337,7 +363,7 @@ void SceneFluid::updateParticles(float dt)
           const auto& p0 = particles[i0].position;
           const auto& p1 = particles[i1].position;
 
-          density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
+          density_[i] += particles[i1].mass * Spiky(p0 - p1, h);
         }
       }
 
@@ -435,7 +461,7 @@ void SceneFluid::updateParticles(float dt)
 
           const auto density1 = density_[toFluidIndex_[i1]];
 
-          particles[i0].velocity -= viscosity_ * (m1 / density1) * (v0 - v1) * Poly6(p0 - p1, h);
+          particles[i0].velocity -= viscosity_ * (m1 / density1) * (v0 - v1) * Spiky(p0 - p1, h);
         }
       }
     }
