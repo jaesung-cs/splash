@@ -69,9 +69,6 @@ private:
   float rho0_ = 0.f; // Rest density
 
   // Fluid simulation - constraints
-  std::vector<float> incompressibility_;
-  std::vector<float> incompressibilityDenoms_;
-  std::vector<glm::vec3> incompressibilitySelfGrad_;
   std::vector<float> incompressibilityLambdas_;
   std::vector<glm::vec3> deltaP_;
 

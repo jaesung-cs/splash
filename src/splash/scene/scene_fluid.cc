@@ -290,6 +290,10 @@ void SceneFluid::updateParticles(float dt)
     const auto n0 = fluidIndices_.size();
     const auto n1 = boundaryIndices_.size();
 
+    density_.resize(n0);
+    incompressibilityLambdas_.resize(n0);
+    deltaP_.resize(n0);
+
     // Compute boundary psi
     for (int i = 0; i < n1; i++)
     {
@@ -314,100 +318,100 @@ void SceneFluid::updateParticles(float dt)
       particles[i0].mass = rho0_ * volume;
     }
 
-    // Density calculation
-
-    density_.resize(n0);
-    for (int i = 0; i < n0; i++)
+    // Projection steps
+    constexpr uint32_t maxSteps = 5;
+    for (int step = 0; step < maxSteps; step++)
     {
-      const auto i0 = fluidIndices_[i];
-
-      // Contribution from self
-      density_[i] = particles[i0].mass * Poly6(glm::vec3(0.f), h);
-
-      // Contribution from neighbors
-      for (auto i1 : neighborIndices_[i0])
+      // Density calculation
+      for (int i = 0; i < n0; i++)
       {
-        const auto& p0 = particles[i0].position;
-        const auto& p1 = particles[i1].position;
+        const auto i0 = fluidIndices_[i];
 
-        density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
+        // Contribution from self
+        density_[i] = particles[i0].mass * Poly6(glm::vec3(0.f), h);
+
+        // Contribution from neighbors
+        for (auto i1 : neighborIndices_[i0])
+        {
+          const auto& p0 = particles[i0].position;
+          const auto& p1 = particles[i1].position;
+
+          density_[i] += particles[i1].mass * Poly6(p0 - p1, h);
+        }
       }
-    }
 
-    // Compute density constraints
-    incompressibility_.resize(n0);
-    for (int i = 0; i < n0; i++)
-      incompressibility_[i] = std::max(density_[i] / rho0_ - 1.f, 0.f);
-
-    // Project to make incompressibility = 0
-    incompressibilitySelfGrad_.resize(n0);
-    incompressibilityDenoms_.resize(n0);
-    for (int i = 0; i < n0; i++)
-    {
-      incompressibilitySelfGrad_[i] = glm::vec3(0.f);
-      incompressibilityDenoms_[i] = 0.f;
-    }
-
-    for (int i = 0; i < n0; i++)
-    {
-      const auto i0 = fluidIndices_[i];
-
-      for (auto i1 : neighborIndices_[i0])
+      // Solve project to make incompressibility = 0
+      for (int i = 0; i < n0; i++)
       {
-        const auto& p0 = particles[i0].position;
-        const auto& p1 = particles[i1].position;
+        const auto i0 = fluidIndices_[i];
 
-        const auto m1 = particles[i1].mass;
+        const auto incompressibility = std::max(density_[i] / rho0_ - 1.f, 0.f);
+        if (incompressibility > 0.f)
+        {
+          glm::vec3 selfGrad(0.f);
+          float denom = 0.f;
 
-        const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
-        const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+          for (auto i1 : neighborIndices_[i0])
+          {
+            const auto& p0 = particles[i0].position;
+            const auto& p1 = particles[i1].position;
 
-        // Add to gradient by self
-        incompressibilitySelfGrad_[i] += grad0;
+            const auto m1 = particles[i1].mass;
 
-        // Add to denominator for movable fluid particles
-        if (particles[i1].type == geom::ParticleType::FLUID)
-          incompressibilityDenoms_[i] += glm::dot(grad1, grad1);
-      }
-    }
+            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
+            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradPoly6(p0 - p1, h);
 
-    // Compte lambdas
-    incompressibilityLambdas_.resize(n0);
-    for (int i = 0; i < n0; i++)
-    {
-      const auto denom = incompressibilityDenoms_[i] + glm::dot(incompressibilitySelfGrad_[i], incompressibilitySelfGrad_[i]);
-      incompressibilityLambdas_[i] = -incompressibility_[i] / denom;
-    }
+            // Add to gradient by self
+            selfGrad += grad0;
 
-    // Compte delta p
-    deltaP_.resize(n0);
-    for (int i = 0; i < n0; i++)
-      deltaP_[i] = glm::vec3(0.f);
+            // Add to denominator for movable fluid particles
+            if (particles[i1].type == geom::ParticleType::FLUID)
+              denom += glm::dot(grad1, grad1);
+          }
 
-    for (int i = 0; i < n0; i++)
-    {
-      const auto i0 = fluidIndices_[i];
+          denom += glm::dot(selfGrad, selfGrad);
 
-      for (auto i1 : neighborIndices_[i0])
-      {
-        const auto& p0 = particles[i0].position;
-        const auto& p1 = particles[i1].position;
-
-        const auto m1 = particles[i1].mass;
-
-        if (particles[i1].type == geom::ParticleType::FLUID)
-          deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradPoly6(p0 - p1, h);
+          // Compute lambdas
+          incompressibilityLambdas_[i] = -incompressibility / denom;
+        }
         else
-          deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradPoly6(p0 - p1, h);
+          incompressibilityLambdas_[i] = 0.f;
+      }
+
+      // Compte delta p
+      for (int i = 0; i < n0; i++)
+        deltaP_[i] = glm::vec3(0.f);
+
+      for (int i = 0; i < n0; i++)
+      {
+        const auto i0 = fluidIndices_[i];
+
+        for (auto i1 : neighborIndices_[i0])
+        {
+          const auto& p0 = particles[i0].position;
+          const auto& p1 = particles[i1].position;
+
+          const auto m1 = particles[i1].mass;
+
+          if (particles[i1].type == geom::ParticleType::FLUID)
+            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradPoly6(p0 - p1, h);
+          else
+            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradPoly6(p0 - p1, h);
+        }
+      }
+
+      // Update positions
+      for (int i = 0; i < n0; i++)
+      {
+        const auto i0 = fluidIndices_[i];
+        particles[i0].position += deltaP_[i];
       }
     }
 
-    // Update positions and velocity
+    // Update velocity
     for (int i = 0; i < n0; i++)
     {
       const auto i0 = fluidIndices_[i];
-
-      particles[i0].position += deltaP_[i];
       particles[i0].velocity = (particles[i0].position - positions_[i0]) / dt;
     }
   }
