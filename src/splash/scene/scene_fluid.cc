@@ -15,69 +15,12 @@
 #include <splash/model/camera.h>
 #include <splash/scene/resources.h>
 #include <splash/fluid/neighbor_search_spatial_hashing.h>
+#include <splash/fluid/sph_kernel.h>
 
 namespace splash
 {
 namespace scene
 {
-namespace
-{
-constexpr float pi = 3.1415926535897932384626433832795f;
-
-float Poly6(const glm::vec3& r, float h)
-{
-  const auto h2 = h * h;
-  const auto r2 = glm::dot(r, r);
-  if (r2 > h2)
-    return 0.f;
-
-  const auto h3 = h2 * h;
-  const auto f = (h2 - r2) / h3;
-  const auto f3 = f * f * f;
-  return 315.f / 64.f / pi * f3;
-}
-
-glm::vec3 gradPoly6(const glm::vec3& r, float h)
-{
-  const auto h2 = h * h;
-  const auto r2 = glm::dot(r, r);
-  if (r2 > h2)
-    return glm::vec3(0.f);
-
-  const auto h4 = h2 * h2;
-  const auto f = (h2 - r2) / h4;
-  const auto f2 = f * f;
-  return -945.f / 32.f / pi * f2 * (r / h);
-}
-
-float Spiky(const glm::vec3& r, float h)
-{
-  const auto h2 = h * h;
-  const auto r2 = glm::dot(r, r);
-  if (r2 > h2)
-    return 0.f;
-
-  const auto r1 = std::sqrt(r2);
-  const auto f = (h - r1) / h2;
-  const auto f3 = f * f * f;
-  return 15.f / pi * f3;
-}
-
-glm::vec3 gradSpiky(const glm::vec3& r, float h)
-{
-  const auto h2 = h * h;
-  const auto r2 = glm::dot(r, r);
-  if (r2 > h2)
-    return glm::vec3(0.f);
-
-  const auto h6 = h2 * h2 * h2;
-  const auto r1 = std::sqrt(r2);
-  if (r1 == 0.f)
-    return -45.f / pi / h6 * h * h * glm::vec3(1.f, 0.f, 0.f); // Random direction
-  return -45.f / pi / h6 * (h - r1) * (h - r1) * (r / r1);
-}
-}
-
 SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
   : Scene()
   , resources_(resources)
@@ -102,17 +45,45 @@ void SceneFluid::drawUi()
 
   ImGui::Checkbox("Animation", &animation_);
 
-  ImGui::SliderInt("Slow motion", &timestepScaleLevel_, 0, 4, "");
-
-  float timestepScaleTable[] = {
+  static const std::vector<float> timestepScaleTable{
     1.f,
     1.7f,
     3.f,
     5.f,
     10.f,
   };
+  ImGui::SliderInt("Slow motion", &timestepScaleLevel_, 0, timestepScaleTable.size() - 1, "");
+
   timestepScale_ = timestepScaleTable[timestepScaleLevel_];
   ImGui::Text("Animation speed X%.1lf", timestepScale_);
+
+  static std::vector<std::string> kernels{
+    "Poly6",
+    "Spiky",
+    "Cubic",
+  };
+
+  ImGui::Text("Kernel");
+  ImGui::PushID(0);
+  for (int i = 0; i < kernels.size(); i++)
+  {
+    ImGui::SameLine();
+    if (ImGui::RadioButton(kernels[i].c_str(), kernelIndex_ == i))
+      kernelIndex_ = i;
+  }
+  ImGui::PopID();
+
+  ImGui::Text("Gradient");
+  ImGui::PushID(1);
+  for (int i = 0; i < kernels.size(); i++)
+  {
+    ImGui::SameLine();
+    if (ImGui::RadioButton(kernels[i].c_str(), gradKernelIndex_ == i))
+      gradKernelIndex_ = i;
+  }
+  ImGui::PopID();
+
+  ImGui::SliderFloat("Viscosity", &viscosity_, 0.f, 1.f);
 }
 
 void SceneFluid::draw()
@@ -202,6 +173,13 @@ void SceneFluid::initializeParticles()
 
   particles.radius() = radius;
 
+  // Kernels
+  const auto h = radius * 4.f;
+  kernels_.resize(3);
+  kernels_[0] = std::make_unique<fluid::SphKernelPoly6>(h);
+  kernels_[1] = std::make_unique<fluid::SphKernelSpiky>(h);
+  kernels_[2] = std::make_unique<fluid::SphKernelSpiky>(h); // TODO: change to cubic
+
   rho0_ = 997.f;
 
   constexpr float pi = 3.1415926535897932384626433832795f;
@@ -273,6 +251,9 @@ void SceneFluid::updateParticles(float dt)
   {
     const auto n = particles.size();
 
+    const auto& kernel = *kernels_[kernelIndex_];
+    const auto& gradKernel = *kernels_[gradKernelIndex_];
+
     constexpr glm::vec3 gravity = { 0.f, 0.f, -9.80665f };
     positions_.resize(n);
     for (int i = 0; i < n; i++)
@@ -289,8 +270,8 @@ void SceneFluid::updateParticles(float dt)
     }
 
     // Neighbor search
-    const auto h = 4.f * radius; // SPH support radius
     {
+      const auto h = 4.f * radius; // SPH support radius
       neighborSearch_->computeNeighbors(particles, h);
       const auto& neighbors = neighborSearch_->neighbors();
 
@@ -338,7 +319,7 @@ void SceneFluid::updateParticles(float dt)
     {
       const auto i0 = boundaryIndices_[i];
 
-      float delta = Spiky(glm::vec3(0.f), h);
+      float delta = kernel(glm::vec3(0.f));
 
       for (auto i1 : neighborIndices_[i0])
       {
@@ -347,7 +328,7 @@ void SceneFluid::updateParticles(float dt)
           const auto& p0 = particles[i0].position;
           const auto& p1 = particles[i1].position;
 
-          delta += Spiky(p0 - p1, h);
+          delta += kernel(p0 - p1);
         }
       }
 
@@ -367,7 +348,7 @@ void SceneFluid::updateParticles(float dt)
         const auto i0 = fluidIndices_[i];
 
         // Contribution from self
-        density_[i] = particles[i0].mass * Spiky(glm::vec3(0.f), h);
+        density_[i] = particles[i0].mass * kernel(glm::vec3(0.f));
 
         // Contribution from neighbors
         for (auto i1 : neighborIndices_[i0])
@@ -375,7 +356,7 @@ void SceneFluid::updateParticles(float dt)
           const auto& p0 = particles[i0].position;
           const auto& p1 = particles[i1].position;
 
-          density_[i] += particles[i1].mass * Spiky(p0 - p1, h);
+          density_[i] += particles[i1].mass * kernel(p0 - p1);
         }
       }
 
@@ -397,8 +378,8 @@ void SceneFluid::updateParticles(float dt)
 
             const auto m1 = particles[i1].mass;
 
-            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradSpiky(p0 - p1, h);
-            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradSpiky(p0 - p1, h);
+            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
+            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
 
             // Add to gradient by self
             selfGrad += grad0;
@@ -433,9 +414,9 @@ void SceneFluid::updateParticles(float dt)
           const auto m1 = particles[i1].mass;
 
           if (particles[i1].type == geom::ParticleType::FLUID)
-            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradSpiky(p0 - p1, h);
+            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradKernel.grad(p0 - p1);
           else
-            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradSpiky(p0 - p1, h);
+            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradKernel.grad(p0 - p1);
         }
       }
 
@@ -473,7 +454,7 @@ void SceneFluid::updateParticles(float dt)
 
           const auto density1 = density_[toFluidIndex_[i1]];
 
-          particles[i0].velocity -= viscosity_ * (m1 / density1) * (v0 - v1) * Spiky(p0 - p1, h);
+          particles[i0].velocity -= viscosity_ * (m1 / density1) * (v0 - v1) * kernel(p0 - p1);
         }
       }
     }

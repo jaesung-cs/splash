@@ -25,6 +25,7 @@ class Particles;
 namespace fluid
 {
 class NeighborSearch;
+class SphKernel;
 }
 
 namespace scene
@@ -67,7 +68,6 @@ private:
   std::vector<int> toFluidIndex_;
   std::vector<float> density_;
   float rho0_ = 0.f; // Rest density
-  float viscosity_ = 0.02f;
   float timestepScale_ = 1.f;
 
   // Fluid simulation - constraints
@@ -81,6 +81,11 @@ private:
   // Rendering options
   bool animation_ = false;
   int timestepScaleLevel_ = 0; // Relates to timestep scale
+
+  std::vector<std::unique_ptr<fluid::SphKernel>> kernels_;
+  int kernelIndex_ = 0;
+  int gradKernelIndex_ = 1;
+  float viscosity_ = 0.02f;
 };
 }
 }
