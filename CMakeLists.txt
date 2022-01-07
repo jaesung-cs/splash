@@ -9,6 +9,7 @@ find_package(glad CONFIG REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(TBB CONFIG REQUIRED)
 
 # splash executable
 add_executable(splash
@@ -63,6 +64,7 @@ target_link_libraries(splash PRIVATE
   glfw
   glm::glm
   imgui::imgui
+  TBB::tbb
 )
 
 target_include_directories(splash PRIVATE

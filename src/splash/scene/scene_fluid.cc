@@ -6,6 +6,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#define NOMINMAX
+#include <tbb/tbb.h>
+
 #include <splash/gl/shaders.h>
 #include <splash/gl/shader.h>
 #include <splash/gl/texture.h>
@@ -44,6 +47,8 @@ void SceneFluid::drawUi()
     initializeParticles();
 
   ImGui::Checkbox("Animation", &animation_);
+
+  ImGui::Checkbox("Multiprocessing", &multiprocessing_);
 
   static const std::vector<float> timestepScaleTable{
     1.f,
@@ -276,8 +281,9 @@ void SceneFluid::updateParticles(float dt)
       const auto& neighbors = neighborSearch_->neighbors();
 
       neighborIndices_.resize(n);
-      for (int i = 0; i < n; i++)
+      forEach(0, n, [&](int i) {
         neighborIndices_[i].clear();
+        });
 
       for (auto neighbor : neighbors)
       {
@@ -315,61 +321,96 @@ void SceneFluid::updateParticles(float dt)
     deltaP_.resize(n0);
 
     // Compute boundary psi
-    for (int i = 0; i < n1; i++)
-    {
-      const auto i0 = boundaryIndices_[i];
-
-      float delta = kernel(glm::vec3(0.f));
-
-      for (auto i1 : neighborIndices_[i0])
+    forEach(0, n1, [&](int i)
       {
-        if (particles[i1].type == geom::ParticleType::BOUNDARY)
+        const auto i0 = boundaryIndices_[i];
+
+        float delta = kernel(glm::vec3(0.f));
+
+        for (auto i1 : neighborIndices_[i0])
         {
-          const auto& p0 = particles[i0].position;
-          const auto& p1 = particles[i1].position;
+          if (particles[i1].type == geom::ParticleType::BOUNDARY)
+          {
+            const auto& p0 = particles[i0].position;
+            const auto& p1 = particles[i1].position;
 
-          delta += kernel(p0 - p1);
+            delta += kernel(p0 - p1);
+          }
         }
-      }
 
-      const auto volume = 1.f / delta;
+        const auto volume = 1.f / delta;
 
-      // Update boundary particle mass
-      particles[i0].mass = rho0_ * volume;
-    }
+        // Update boundary particle mass
+        particles[i0].mass = rho0_ * volume;
+      });
 
     // Projection steps
     constexpr uint32_t maxSteps = 5;
     for (int step = 0; step < maxSteps; step++)
     {
       // Density calculation
-      for (int i = 0; i < n0; i++)
-      {
-        const auto i0 = fluidIndices_[i];
-
-        // Contribution from self
-        density_[i] = particles[i0].mass * kernel(glm::vec3(0.f));
-
-        // Contribution from neighbors
-        for (auto i1 : neighborIndices_[i0])
+      forEach(0, n0, [&](int i)
         {
-          const auto& p0 = particles[i0].position;
-          const auto& p1 = particles[i1].position;
+          const auto i0 = fluidIndices_[i];
 
-          density_[i] += particles[i1].mass * kernel(p0 - p1);
-        }
-      }
+          // Contribution from self
+          density_[i] = particles[i0].mass * kernel(glm::vec3(0.f));
+
+          // Contribution from neighbors
+          for (auto i1 : neighborIndices_[i0])
+          {
+            const auto& p0 = particles[i0].position;
+            const auto& p1 = particles[i1].position;
+
+            density_[i] += particles[i1].mass * kernel(p0 - p1);
+          }
+        });
 
       // Solve project to make incompressibility = 0
-      for (int i = 0; i < n0; i++)
-      {
-        const auto i0 = fluidIndices_[i];
-
-        const auto incompressibility = std::max(density_[i] / rho0_ - 1.f, 0.f);
-        if (incompressibility > 0.f)
+      forEach(0, n0, [&](int i)
         {
-          glm::vec3 selfGrad(0.f);
-          float denom = 0.f;
+          const auto i0 = fluidIndices_[i];
+
+          const auto incompressibility = std::max(density_[i] / rho0_ - 1.f, 0.f);
+          if (incompressibility > 0.f)
+          {
+            glm::vec3 selfGrad(0.f);
+            float denom = 0.f;
+
+            for (auto i1 : neighborIndices_[i0])
+            {
+              const auto& p0 = particles[i0].position;
+              const auto& p1 = particles[i1].position;
+
+              const auto m1 = particles[i1].mass;
+
+              const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
+              const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
+
+              // Add to gradient by self
+              selfGrad += grad0;
+
+              // Add to denominator for movable fluid particles
+              if (particles[i1].type == geom::ParticleType::FLUID)
+                denom += glm::dot(grad1, grad1);
+            }
+
+            denom += glm::dot(selfGrad, selfGrad);
+
+            // Compute lambdas
+            incompressibilityLambdas_[i] = -incompressibility / denom;
+          }
+          else
+            incompressibilityLambdas_[i] = 0.f;
+        });
+
+      // Compte delta p
+      for (int i = 0; i < n0; i++)
+        deltaP_[i] = glm::vec3(0.f);
+
+      forEach(0, n0, [&](int i)
+        {
+          const auto i0 = fluidIndices_[i];
 
           for (auto i1 : neighborIndices_[i0])
           {
@@ -378,62 +419,27 @@ void SceneFluid::updateParticles(float dt)
 
             const auto m1 = particles[i1].mass;
 
-            const glm::vec3 grad0 = 1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
-            const glm::vec3 grad1 = -1.f / rho0_ * m1 * gradKernel.grad(p0 - p1);
-
-            // Add to gradient by self
-            selfGrad += grad0;
-
-            // Add to denominator for movable fluid particles
             if (particles[i1].type == geom::ParticleType::FLUID)
-              denom += glm::dot(grad1, grad1);
+              deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradKernel.grad(p0 - p1);
+            else
+              deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradKernel.grad(p0 - p1);
           }
-
-          denom += glm::dot(selfGrad, selfGrad);
-
-          // Compute lambdas
-          incompressibilityLambdas_[i] = -incompressibility / denom;
-        }
-        else
-          incompressibilityLambdas_[i] = 0.f;
-      }
-
-      // Compte delta p
-      for (int i = 0; i < n0; i++)
-        deltaP_[i] = glm::vec3(0.f);
-
-      for (int i = 0; i < n0; i++)
-      {
-        const auto i0 = fluidIndices_[i];
-
-        for (auto i1 : neighborIndices_[i0])
-        {
-          const auto& p0 = particles[i0].position;
-          const auto& p1 = particles[i1].position;
-
-          const auto m1 = particles[i1].mass;
-
-          if (particles[i1].type == geom::ParticleType::FLUID)
-            deltaP_[i] += 1.f / rho0_ * (incompressibilityLambdas_[i] + incompressibilityLambdas_[toFluidIndex_[i1]]) * m1 * gradKernel.grad(p0 - p1);
-          else
-            deltaP_[i] += 1.f / rho0_ * incompressibilityLambdas_[i] * m1 * gradKernel.grad(p0 - p1);
-        }
-      }
+        });
 
       // Update positions
-      for (int i = 0; i < n0; i++)
-      {
-        const auto i0 = fluidIndices_[i];
-        particles[i0].position += deltaP_[i];
-      }
+      forEach(0, n0, [&](int i)
+        {
+          const auto i0 = fluidIndices_[i];
+          particles[i0].position += deltaP_[i];
+        });
     }
 
     // Update velocity
-    for (int i = 0; i < n0; i++)
-    {
-      const auto i0 = fluidIndices_[i];
-      particles[i0].velocity = (particles[i0].position - positions_[i0]) / dt;
-    }
+    forEach(0, n0, [&](int i)
+      {
+        const auto i0 = fluidIndices_[i];
+        particles[i0].velocity = (particles[i0].position - positions_[i0]) / dt;
+      });
 
     // Solve viscosity
     for (int i = 0; i < n0; i++)
@@ -461,6 +467,25 @@ void SceneFluid::updateParticles(float dt)
   }
 
   particlesGeometry_->update(*particles_);
+}
+
+void SceneFluid::forEach(int begin, int end, std::function<void(int)> f)
+{
+  // TODO: multiprocessing
+  if (multiprocessing_)
+  {
+    tbb::parallel_for(tbb::blocked_range<int>(begin, end),
+      [&](const tbb::blocked_range<int>& range)
+      {
+        for (int i = range.begin(); i < range.end(); i++)
+          f(i);
+      });
+  }
+  else
+  {
+    for (int i = begin; i < end; i++)
+      f(i);
+  }
 }
 }
 }

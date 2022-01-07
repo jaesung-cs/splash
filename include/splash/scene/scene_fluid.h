@@ -4,6 +4,7 @@
 #include <memory>
 #include <chrono>
 #include <vector>
+#include <functional>
 
 #include <glm/glm.hpp>
 
@@ -49,6 +50,8 @@ private:
   void initializeParticles();
   void updateParticles(float dt);
 
+  void forEach(int begin, int end, std::function<void(int)> f);
+
   static constexpr uint32_t fluidSideX_ = 16;
   static constexpr uint32_t fluidSideY_ = 16;
   static constexpr uint32_t fluidSideZ_ = 12;
@@ -80,6 +83,7 @@ private:
 
   // Rendering options
   bool animation_ = false;
+  bool multiprocessing_ = false;
   int timestepScaleLevel_ = 0; // Relates to timestep scale
 
   std::vector<std::unique_ptr<fluid::SphKernel>> kernels_;
