@@ -30,6 +30,7 @@ SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
   , shaders_(shaders)
 {
   particles_ = std::make_unique<geom::Particles>(particleCount_);
+  fluidParticles_ = std::make_unique<geom::Particles>(fluidCount_);
   particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
 
   lastTime_ = std::chrono::high_resolution_clock::now();
@@ -45,6 +46,12 @@ void SceneFluid::drawUi()
 {
   if (ImGui::Button("Initialize"))
     initializeParticles();
+
+  ImGui::Text("%d fluid particles", fluidCount_);
+  ImGui::Text("%d boundary particles", boundaryCount_);
+  ImGui::Text("%d total particles", particleCount_);
+
+  ImGui::Checkbox("Show boundary", &showBoundary_);
 
   ImGui::Checkbox("Animation", &animation_);
 
@@ -467,7 +474,26 @@ void SceneFluid::updateParticles(float dt)
     }
   }
 
-  particlesGeometry_->update(*particles_);
+  // Update with boundary visibility
+  if (showBoundary_)
+    particlesGeometry_->update(*particles_);
+  else
+  {
+    updateFluidParticles();
+    particlesGeometry_->update(*fluidParticles_);
+  }
+}
+
+void SceneFluid::updateFluidParticles()
+{
+  fluidParticles_->radius() = particles_->radius();
+
+  int index = 0;
+  for (int i = 0; i < particles_->size(); i++)
+  {
+    if ((*particles_)[i].type == geom::ParticleType::FLUID)
+      (*fluidParticles_)[index++] = (*particles_)[i];
+  }
 }
 
 void SceneFluid::forEach(int begin, int end, std::function<void(int)> f)

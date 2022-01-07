@@ -48,18 +48,20 @@ private:
   gl::Shaders* shaders_ = nullptr;
 
   void initializeParticles();
+  void updateFluidParticles();
   void updateParticles(float dt);
 
   void forEach(int begin, int end, std::function<void(int)> f);
 
   static constexpr uint32_t fluidSideX_ = 16;
   static constexpr uint32_t fluidSideY_ = 16;
-  static constexpr uint32_t fluidSideZ_ = 64;
+  static constexpr uint32_t fluidSideZ_ = 32;
   static constexpr uint32_t fluidCount_ = fluidSideX_ * fluidSideY_ * fluidSideZ_;
-  static constexpr uint32_t boundarySide_ = 32;
+  static constexpr uint32_t boundarySide_ = 34;
   static constexpr uint32_t boundaryCount_ = boundarySide_ * boundarySide_ * 6; // 6 sides
   static constexpr uint32_t particleCount_ = fluidCount_ + boundaryCount_;
   std::unique_ptr<geom::Particles> particles_;
+  std::unique_ptr<geom::Particles> fluidParticles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;
 
   // Fluid simulation
@@ -90,6 +92,8 @@ private:
   int kernelIndex_ = 0;
   int gradKernelIndex_ = 1;
   float viscosity_ = 0.02f;
+
+  bool showBoundary_ = false;
 };
 }
 }
