@@ -277,6 +277,7 @@ void SceneFluid::updateParticles(float dt)
     // Neighbor search
     {
       const auto h = 4.f * radius; // SPH support radius
+      neighborSearch_->setMultiprocessing(multiprocessing_);
       neighborSearch_->computeNeighbors(particles, h);
       const auto& neighbors = neighborSearch_->neighbors();
 

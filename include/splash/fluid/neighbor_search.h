@@ -20,10 +20,16 @@ public:
   NeighborSearch();
   virtual ~NeighborSearch();
 
+  void setMultiprocessing(bool flag)
+  {
+    multiprocessing_ = flag;
+  }
+
   virtual void computeNeighbors(const geom::Particles& particles, float h) = 0;
   const std::vector<Neighbor>& neighbors() const noexcept { return neighbors_; }
 
 protected:
+  bool multiprocessing_ = false;
   std::vector<Neighbor> neighbors_;
 };
 }

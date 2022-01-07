@@ -18,9 +18,14 @@ public:
   void computeNeighbors(const geom::Particles& particles, float h) override;
 
 private:
+  void computeNeighborsMultiThreaded(const geom::Particles& particles, float h);
+  void computeNeighborsSingleThreaded(const geom::Particles& particles, float h);
+
   uint32_t hash3d(const glm::ivec3& p);
 
   static constexpr uint32_t hashBucketSize_ = 1000000;
+  std::vector<std::vector<uint32_t>> hashTable_;
+  std::vector<std::vector<uint32_t>> neighborsPerParticle_;
 };
 }
 }
