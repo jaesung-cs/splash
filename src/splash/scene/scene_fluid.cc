@@ -45,7 +45,10 @@ SceneFluid::~SceneFluid() = default;
 void SceneFluid::drawUi()
 {
   if (ImGui::Button("Initialize"))
+  {
+    waveAnimationTime_ = 0.f;
     initializeParticles();
+  }
 
   ImGui::Text("%d fluid particles", fluidCount_);
   ImGui::Text("%d boundary particles", boundaryCount_);
@@ -68,6 +71,9 @@ void SceneFluid::drawUi()
 
   timestepScale_ = timestepScaleTable[timestepScaleLevel_];
   ImGui::Text("Animation speed X%.1lf", timestepScale_);
+
+  ImGui::Checkbox("Wave", &wave_);
+  ImGui::SliderFloat("Wave speed", &waveSpeed_, 0.f, 5.f);
 
   static std::vector<std::string> kernels{
     "Poly6",
@@ -209,7 +215,7 @@ void SceneFluid::initializeParticles()
 
         auto& particle = particles[index];
         particle.type = geom::ParticleType::FLUID;
-        particle.position = glm::vec3(i + k * 0.1f, j + k * 0.05f, k * 0.8f) * 2.5f * radius + glm::vec3(0.f, 0.f, baseHeight);
+        particle.position = glm::vec3(i, j, k * 0.8f) * 2.5f * radius + glm::vec3(0.3f, 0.3f, baseHeight);
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
@@ -224,7 +230,7 @@ void SceneFluid::initializeParticles()
   boundaryParticle.color = glm::vec3(101.f, 67.f, 33.f) / 255.f;
   boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
-  constexpr glm::vec3 baseOffset(-0.2f, -0.2f, radius);
+  constexpr glm::vec3 baseOffset(0.f, 0.f, radius);
   const auto boundaryLength = boundarySide_ * 2.f * radius;
   int index = fluidCount_;
   for (int i = 0; i < boundarySide_; i++)
@@ -234,6 +240,7 @@ void SceneFluid::initializeParticles()
       const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 2.f * radius;
 
       boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z);
+      boundaryParticle.velocity = { 0.f, 0.f, 0.f };
       particles[index++] = boundaryParticle;
 
       boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z + boundaryLength);
@@ -246,7 +253,9 @@ void SceneFluid::initializeParticles()
       particles[index++] = boundaryParticle;
 
       boundaryParticle.position = baseOffset + glm::vec3(b.z, b.x, b.y);
+      boundaryParticle.velocity = { 1.f, 0.f, 0.f };
       particles[index++] = boundaryParticle;
+      boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
       boundaryParticle.position = baseOffset + glm::vec3(b.z + boundaryLength, b.x, b.y);
       particles[index++] = boundaryParticle;
@@ -262,6 +271,18 @@ void SceneFluid::updateParticles(float dt)
   if (animation_)
   {
     const auto n = particles.size();
+
+    // Boundary wave animation
+    if (wave_)
+    {
+      waveAnimationTime_ += dt * waveSpeed_;
+      constexpr float amplitude = 1.f;
+      for (int i = 0; i < n; i++)
+      {
+        if (particles[i].type == geom::ParticleType::BOUNDARY && particles[i].velocity.x != 0.f)
+          particles[i].position.x = (1.f - std::cos(waveAnimationTime_)) / 2.f * amplitude;
+      }
+    }
 
     const auto& kernel = *kernels_[kernelIndex_];
     const auto& gradKernel = *kernels_[gradKernelIndex_];

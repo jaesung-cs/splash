@@ -94,6 +94,10 @@ private:
   float viscosity_ = 0.02f;
 
   bool showBoundary_ = false;
+
+  bool wave_ = false;
+  float waveSpeed_ = 1.f;
+  float waveAnimationTime_ = 0.f;
 };
 }
 }
