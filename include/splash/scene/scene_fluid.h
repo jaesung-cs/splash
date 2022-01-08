@@ -53,13 +53,15 @@ private:
 
   void forEach(int begin, int end, std::function<void(int)> f);
 
-  static constexpr uint32_t fluidSideX_ = 16;
-  static constexpr uint32_t fluidSideY_ = 16;
-  static constexpr uint32_t fluidSideZ_ = 32;
-  static constexpr uint32_t fluidCount_ = fluidSideX_ * fluidSideY_ * fluidSideZ_;
-  static constexpr uint32_t boundarySide_ = 34;
-  static constexpr uint32_t boundaryCount_ = boundarySide_ * boundarySide_ * 6; // 6 sides
-  static constexpr uint32_t particleCount_ = fluidCount_ + boundaryCount_;
+  static constexpr uint32_t maxFluidSide_ = 64;
+  static constexpr uint32_t maxFluidCount_ = maxFluidSide_ * maxFluidSide_ * maxFluidSide_;
+  static constexpr uint32_t maxParticleCount_ = maxFluidCount_ + (maxFluidSide_ * maxFluidSide_ * 6);
+
+  int fluidSideX_ = 16;
+  int fluidSideY_ = 16;
+  int fluidSideZ_ = 32;
+  uint32_t fluidCount_ = 0;
+  uint32_t particleCount_ = 0;
   std::unique_ptr<geom::Particles> particles_;
   std::unique_ptr<geom::Particles> fluidParticles_;
   std::unique_ptr<gl::ParticlesGeometry> particlesGeometry_;

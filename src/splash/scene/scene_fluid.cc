@@ -29,9 +29,9 @@ SceneFluid::SceneFluid(Resources* resources, gl::Shaders* shaders)
   , resources_(resources)
   , shaders_(shaders)
 {
-  particles_ = std::make_unique<geom::Particles>(particleCount_);
-  fluidParticles_ = std::make_unique<geom::Particles>(fluidCount_);
-  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(particleCount_);
+  particles_ = std::make_unique<geom::Particles>(maxParticleCount_);
+  fluidParticles_ = std::make_unique<geom::Particles>(maxFluidCount_);
+  particlesGeometry_ = std::make_unique<gl::ParticlesGeometry>(maxParticleCount_);
 
   lastTime_ = std::chrono::high_resolution_clock::now();
 
@@ -44,6 +44,10 @@ SceneFluid::~SceneFluid() = default;
 
 void SceneFluid::drawUi()
 {
+  ImGui::SliderInt("X", &fluidSideX_, 1, maxFluidSide_);
+  ImGui::SliderInt("Y", &fluidSideY_, 1, maxFluidSide_);
+  ImGui::SliderInt("Z", &fluidSideZ_, 1, maxFluidSide_);
+
   if (ImGui::Button("Initialize"))
   {
     waveAnimationTime_ = 0.f;
@@ -51,7 +55,7 @@ void SceneFluid::drawUi()
   }
 
   ImGui::Text("%d fluid particles", fluidCount_);
-  ImGui::Text("%d boundary particles", boundaryCount_);
+  ImGui::Text("%d boundary particles", particleCount_ - fluidCount_);
   ImGui::Text("%d total particles", particleCount_);
 
   ImGui::Checkbox("Show boundary", &showBoundary_);
@@ -187,9 +191,13 @@ void SceneFluid::initializeParticles()
 {
   auto& particles = *particles_;
   constexpr float radiusFactor = 1.4f;
-  constexpr float radius = 1.f / fluidSideX_;
+  constexpr float radius = 0.1f;
 
   particles.radius() = radius;
+
+  fluidCount_ = fluidSideX_ * fluidSideY_ * fluidSideZ_;
+  particleCount_ = fluidCount_ + (fluidSideX_ * 3 * fluidSideY_ + fluidSideY_ * fluidSideZ_ + fluidSideZ_ * fluidSideX_ * 3) * 2;
+  particles.resize(particleCount_);
 
   // Kernels
   const auto h = radius * 4.f;
@@ -201,7 +209,7 @@ void SceneFluid::initializeParticles()
   rho0_ = 997.f;
 
   constexpr float pi = 3.1415926535897932384626433832795f;
-  const auto mass = rho0_ * 8.f * radius * radius * radius; // Cubic particle
+  const auto mass = 0.8 * rho0_ * 8.f * radius * radius * radius; // Cubic particle
 
   constexpr float baseHeight = 0.2f;
 
@@ -215,7 +223,7 @@ void SceneFluid::initializeParticles()
 
         auto& particle = particles[index];
         particle.type = geom::ParticleType::FLUID;
-        particle.position = glm::vec3(i, j, k * 0.8f) * 2.5f * radius + glm::vec3(0.3f, 0.3f, baseHeight);
+        particle.position = glm::vec3(i + 1, j + 1, k + 1) * 2.f * radius;
         particle.mass = mass;
         particle.velocity = { 0.f, 0.f, 0.f };
         particle.color = { 0.f, 0.f, 1.f };
@@ -230,34 +238,47 @@ void SceneFluid::initializeParticles()
   boundaryParticle.color = glm::vec3(101.f, 67.f, 33.f) / 255.f;
   boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
-  constexpr glm::vec3 baseOffset(0.f, 0.f, radius);
-  const auto boundaryLength = boundarySide_ * 2.f * radius;
   int index = fluidCount_;
-  for (int i = 0; i < boundarySide_; i++)
+  for (int i = 0; i < fluidSideX_ * 3; i++)
   {
-    for (int j = 0; j < boundarySide_; j++)
+    for (int j = 0; j < fluidSideY_; j++)
     {
-      const auto b = glm::vec3(i + 0.5f, j + 0.5f, 0.f) * 2.f * radius;
+      const auto b = glm::vec3(i + 1, j + 1, 0.f) * 2.f * radius;
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z);
-      boundaryParticle.velocity = { 0.f, 0.f, 0.f };
+      boundaryParticle.position = glm::vec3(b.x, b.y, b.z);
       particles[index++] = boundaryParticle;
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.y, b.z + boundaryLength);
+      boundaryParticle.position = glm::vec3(b.x, b.y, b.z + (fluidSideZ_ + 1) * 2.f * radius);
+      particles[index++] = boundaryParticle;
+    }
+  }
+
+  for (int i = 0; i < fluidSideX_ * 3; i++)
+  {
+    for (int j = 0; j < fluidSideZ_; j++)
+    {
+      const auto b = glm::vec3(i + 1, j + 1, 0.f) * 2.f * radius;
+
+      boundaryParticle.position = glm::vec3(b.x, b.z, b.y);
       particles[index++] = boundaryParticle;
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.z, b.y);
+      boundaryParticle.position = glm::vec3(b.x, b.z + (fluidSideY_ + 1) * 2.f * radius, b.y);
       particles[index++] = boundaryParticle;
+    }
+  }
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.x, b.z + boundaryLength, b.y);
-      particles[index++] = boundaryParticle;
+  for (int i = 0; i < fluidSideY_; i++)
+  {
+    for (int j = 0; j < fluidSideZ_; j++)
+    {
+      const auto b = glm::vec3(i + 1, j + 1, 0.f) * 2.f * radius;
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.z, b.x, b.y);
+      boundaryParticle.position = glm::vec3(b.z, b.x, b.y);
       boundaryParticle.velocity = { 1.f, 0.f, 0.f };
       particles[index++] = boundaryParticle;
       boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
-      boundaryParticle.position = baseOffset + glm::vec3(b.z + boundaryLength, b.x, b.y);
+      boundaryParticle.position = glm::vec3(b.z + (fluidSideX_ * 3 + 1) * 2.f * radius, b.x, b.y);
       particles[index++] = boundaryParticle;
     }
   }
@@ -521,6 +542,7 @@ void SceneFluid::updateParticles(float dt)
 void SceneFluid::updateFluidParticles()
 {
   fluidParticles_->radius() = particles_->radius();
+  fluidParticles_->resize(fluidCount_);
 
   int index = 0;
   for (int i = 0; i < particles_->size(); i++)
