@@ -4,6 +4,7 @@
 #include <thread>
 #include <iostream>
 #include <chrono>
+#include <queue>
 
 #include <glad/glad.h>
 
@@ -126,12 +127,23 @@ void Application::run()
   };
   std::unique_ptr<scene::Scene> scene = selectScene(1);
 
+  float time = 0.f;
+  std::queue<float> frames;
   auto lastTimestamp = std::chrono::high_resolution_clock::now();
   while (!glfwWindowShouldClose(window_))
   {
     auto now = std::chrono::high_resolution_clock::now();
     auto dt = std::chrono::duration<float>(now - lastTimestamp).count();
     lastTimestamp = now;
+
+    // FPS calculation
+    time += dt;
+    frames.push(time);
+    constexpr float fpsWindow = 1.f; // Recent 1s
+    while (frames.front() < time - fpsWindow)
+      frames.pop();
+    constexpr float eps = 1e-6;
+    const auto fps = frames.size() / (frames.back() - frames.front() + eps);
 
     glfwPollEvents();
     handleEvents();
@@ -144,6 +156,8 @@ void Application::run()
     static int sceneIndex = 1;
     if (ImGui::Begin("Control"))
     {
+      ImGui::Text("FPS: %.1lf", fps);
+
       const auto currentSceneName = scenes[sceneIndex];
       if (ImGui::BeginCombo("Scene", currentSceneName.c_str()))
       {

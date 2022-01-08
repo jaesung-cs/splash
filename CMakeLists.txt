@@ -9,6 +9,7 @@ find_package(glad CONFIG REQUIRED)
 find_package(glfw3 REQUIRED)
 find_package(glm CONFIG REQUIRED)
 find_package(imgui CONFIG REQUIRED)
+find_package(TBB CONFIG REQUIRED)
 
 # splash executable
 add_executable(splash
@@ -37,6 +38,7 @@ add_executable(splash
   include/splash/fluid/neighbor_search.h
   include/splash/fluid/neighbor_search_naive.h
   include/splash/fluid/neighbor_search_spatial_hashing.h
+  include/splash/fluid/sph_kernel.h
   include/splash/geom/particle.h
   include/splash/geom/particles.h
   include/splash/geom/particles_bvh.h
@@ -62,6 +64,7 @@ target_link_libraries(splash PRIVATE
   glfw
   glm::glm
   imgui::imgui
+  TBB::tbb
 )
 
 target_include_directories(splash PRIVATE
