@@ -474,6 +474,19 @@ void SceneFluid::updateParticles(float dt)
     }
   }
 
+  // Update color mapped with velocity
+  constexpr float vmax = 3.f;
+  for (int i = 0; i < particles.size(); i++)
+  {
+    if (particles[i].type == geom::ParticleType::FLUID)
+    {
+      const auto v2 = glm::dot(particles[i].velocity, particles[i].velocity);
+      const auto v = std::sqrt(v2);
+      const auto t = std::min(v / vmax, 1.f);
+      particles[i].color = glm::vec3(t, t, 1.f);
+    }
+  }
+
   // Update with boundary visibility
   if (showBoundary_)
     particlesGeometry_->update(*particles_);
