@@ -195,8 +195,11 @@ void SceneFluid::initializeParticles()
 
   particles.radius() = radius;
 
+  const float pillarSide = fluidSideY_ / 3;
+
   fluidCount_ = fluidSideX_ * fluidSideY_ * fluidSideZ_;
-  particleCount_ = fluidCount_ + (fluidSideX_ * 3 * fluidSideY_ + fluidSideY_ * fluidSideZ_ + fluidSideZ_ * fluidSideX_ * 3) * 2;
+  const auto pillarCount = fluidSideZ_ * pillarSide * 4;
+  particleCount_ = fluidCount_ + (fluidSideX_ * 3 * fluidSideY_ + fluidSideY_ * fluidSideZ_ + fluidSideZ_ * fluidSideX_ * 3) * 2 + pillarCount;
   particles.resize(particleCount_);
 
   // Kernels
@@ -279,6 +282,28 @@ void SceneFluid::initializeParticles()
       boundaryParticle.velocity = { 0.f, 0.f, 0.f };
 
       boundaryParticle.position = glm::vec3(b.z + (fluidSideX_ * 3 + 1) * 2.f * radius, b.x, b.y);
+      particles[index++] = boundaryParticle;
+    }
+  }
+
+  // Pillar
+  const glm::vec3 pillarCenter = glm::vec3(fluidSideX_ * 2.f, fluidSideY_ * 0.5f, 0.f) * 2.f * radius;
+  for (int i = 0; i < pillarSide; i++)
+  {
+    for (int j = 0; j < fluidSideZ_; j++)
+    {
+      const auto b = glm::vec3(i - pillarSide / 2.f + 0.5f, pillarSide / 2.f, j + 1) * 2.f * radius;
+
+      boundaryParticle.position = pillarCenter + glm::vec3(b.x, -b.y, b.z);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = pillarCenter + glm::vec3(b.x,  b.y, b.z);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = pillarCenter + glm::vec3(-b.y, b.x, b.z);
+      particles[index++] = boundaryParticle;
+
+      boundaryParticle.position = pillarCenter + glm::vec3( b.y, b.x, b.z);
       particles[index++] = boundaryParticle;
     }
   }
