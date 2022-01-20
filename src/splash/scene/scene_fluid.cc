@@ -82,7 +82,6 @@ void SceneFluid::drawUi()
   static std::vector<std::string> kernels{
     "Poly6",
     "Spiky",
-    "Cubic",
   };
 
   ImGui::Text("Kernel");
